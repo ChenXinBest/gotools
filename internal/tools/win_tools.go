@@ -7,6 +7,8 @@ import (
 
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
+
+	"gotools/internal/log"
 )
 
 // ProcessInfo 进程信息结构体
@@ -26,8 +28,7 @@ func ShowSystemInfo() {
 	infos, _ := GetSystemProcessInfos()
 
 	for _, info := range infos {
-		fmt.Printf("PID: %d, 名称: %s, 命令行: %s, CPU: %.2f%%, 内存: %v MB\n",
-			info.PID, info.Name, info.Cmdline, info.CPUPercent, info.MemoryMB)
+		log.Info("Process info", "pid", info.PID, "name", info.Name, "cmdline", info.Cmdline, "cpu", info.CPUPercent, "memory", info.MemoryMB)
 	}
 }
 

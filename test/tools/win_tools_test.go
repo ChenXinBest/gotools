@@ -24,7 +24,7 @@ func TestGetSystemProcessInfos(t *testing.T) {
 
 	// 验证返回的进程信息结构
 	for _, info := range infos {
-		t.Logf("PID: %d, Name: %s, Laddr: %s, Raddr: %s, Status: %s",
+		t.Logf("PID: %d, Name: %s, Laddr: %s, Raddr: %d, Status: %s",
 			info.PID, info.Name, info.ListenAddr, info.ListenPort, info.Status)
 	}
 }

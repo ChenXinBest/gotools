@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 
+	"gotools/internal/log"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -12,6 +14,12 @@ import (
 var assets embed.FS
 
 func main() {
+	// 初始化日志系统
+	if err := log.Init(); err != nil {
+		println("Error initializing log:", err.Error())
+		return
+	}
+
 	// Create an instance of the app structure
 	app := NewApp()
 
@@ -31,6 +39,6 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		log.Error("Error running app", "error", err)
 	}
 }

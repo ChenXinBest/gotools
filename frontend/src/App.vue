@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import ProcessManager from './components/ProcessManager.vue'
+import DatabaseBackup from './components/DatabaseBackup.vue'
 
 const currentTool = ref('process-manager')
 
@@ -15,6 +16,7 @@ function handleNavigate(toolId) {
     <Sidebar :current-tool="currentTool" @navigate="handleNavigate" />
     <div class="main-content">
       <ProcessManager v-if="currentTool === 'process-manager'" />
+      <DatabaseBackup v-if="currentTool === 'database-backup'" />
     </div>
   </div>
 </template>
