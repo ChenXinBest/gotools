@@ -3,6 +3,7 @@ package tools
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
@@ -15,8 +16,8 @@ type ProcessInfo struct {
 	Cmdline    string
 	CPUPercent float64
 	MemoryMB   uint64
-	Laddr      string
-	Raddr      string
+	ListenAddr string
+	ListenPort uint32
 	Status     string
 }
 
@@ -37,6 +38,9 @@ func GetSystemProcessInfos() ([]ProcessInfo, error) {
 		return nil, err
 	}
 
+	// 获取CPU核心数
+	cpuCount := float64(runtime.NumCPU())
+
 	var infos []ProcessInfo
 	for _, pid := range pids {
 		p, err := process.NewProcess(pid)
@@ -47,6 +51,8 @@ func GetSystemProcessInfos() ([]ProcessInfo, error) {
 		name, _ := p.Name()
 		cmdline, _ := p.Cmdline()
 		cpuPercent, _ := p.CPUPercent()
+		// 归一化CPU使用率，除以核心数
+		normalizedCPU := cpuPercent / cpuCount
 		memInfo, _ := p.MemoryInfo()
 
 		var memMB uint64
@@ -61,10 +67,10 @@ func GetSystemProcessInfos() ([]ProcessInfo, error) {
 			PID:        pid,
 			Name:       name,
 			Cmdline:    cmdline,
-			CPUPercent: cpuPercent,
+			CPUPercent: normalizedCPU,
 			MemoryMB:   memMB,
-			Laddr:      ports.laddr,
-			Raddr:      ports.raddr,
+			ListenAddr: ports.listenAddr,
+			ListenPort: ports.listenPort,
 			Status:     ports.status,
 		})
 	}
@@ -74,9 +80,9 @@ func GetSystemProcessInfos() ([]ProcessInfo, error) {
 
 // processPorts 用于存储进程的端口信息
 type processPorts struct {
-	laddr  string
-	raddr  string
-	status string
+	listenAddr string
+	listenPort uint32
+	status     string
 }
 
 // getProcessPorts 获取指定进程的端口占用信息
@@ -86,12 +92,11 @@ func getProcessPorts(pid int32) (processPorts, error) {
 		return processPorts{}, err
 	}
 
-	// 只取第一个连接的信息
 	conn := connections[0]
 	return processPorts{
-		laddr:  conn.Laddr.String(),
-		raddr:  conn.Raddr.String(),
-		status: conn.Status,
+		listenAddr: conn.Laddr.IP,
+		listenPort: conn.Laddr.Port,
+		status:     conn.Status,
 	}, nil
 }
 
@@ -120,15 +125,30 @@ func SearchPidByKeyWord(keyword string) (ProcessInfo, error) {
 		if hasValidPID && info.PID == searchPID {
 			return info, nil
 		}
-		// 匹配本地端口
-		if keyword != "" && contains(info.Laddr, keyword) {
+		// 匹配监听地址
+		if keyword != "" && contains(info.ListenAddr, keyword) {
 			return info, nil
 		}
-		// 匹配远程端口
-		if keyword != "" && contains(info.Raddr, keyword) {
+		// 匹配监听端口
+		if keyword != "" && fmt.Sprintf("%d", info.ListenPort) == keyword {
 			return info, nil
 		}
 	}
 
 	return ProcessInfo{}, fmt.Errorf("未找到匹配进程: %s", keyword)
+}
+
+// KillProcessByPID 根据PID终止指定进程
+func KillProcessByPID(pid int32) error {
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return fmt.Errorf("无法找到进程 %d: %v", pid, err)
+	}
+
+	err = p.Kill()
+	if err != nil {
+		return fmt.Errorf("终止进程 %d 失败: %v", pid, err)
+	}
+
+	return nil
 }

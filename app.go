@@ -3,25 +3,34 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"gotools/internal/tools"
 )
 
-// App struct
 type App struct {
 	ctx context.Context
 }
 
-// NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{}
 }
 
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// Greet returns a greeting for the given name
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
+}
+
+func (a *App) GetSystemProcessInfos() ([]tools.ProcessInfo, error) {
+	return tools.GetSystemProcessInfos()
+}
+
+func (a *App) SearchPidByKeyWord(keyword string) (tools.ProcessInfo, error) {
+	return tools.SearchPidByKeyWord(keyword)
+}
+
+func (a *App) KillProcessByPID(pid int32) error {
+	return tools.KillProcessByPID(pid)
 }
