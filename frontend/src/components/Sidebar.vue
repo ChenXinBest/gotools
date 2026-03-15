@@ -22,7 +22,7 @@ const menuItems = [
     {
         category: "数据库",
         icon: FaDatabase,
-        items: [{ id: "database-backup", name: "导出", icon: FaSave }],
+        items: [{ id: "database-backup", name: "导入/导出", icon: FaSave }],
     },
 ];
 

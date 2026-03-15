@@ -6,12 +6,20 @@ export function AddDatabaseConnection(arg1) {
   return window['go']['main']['App']['AddDatabaseConnection'](arg1);
 }
 
+export function CheckImportConflicts(arg1) {
+  return window['go']['main']['App']['CheckImportConflicts'](arg1);
+}
+
 export function ConnectDatabase(arg1) {
   return window['go']['main']['App']['ConnectDatabase'](arg1);
 }
 
 export function DeleteDatabaseConnection(arg1) {
   return window['go']['main']['App']['DeleteDatabaseConnection'](arg1);
+}
+
+export function DropConflictingTables(arg1) {
+  return window['go']['main']['App']['DropConflictingTables'](arg1);
 }
 
 export function ExportDatabases(arg1) {
@@ -40,6 +48,14 @@ export function GetSystemProcessInfos() {
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function ImportDatabases(arg1) {
+  return window['go']['main']['App']['ImportDatabases'](arg1);
+}
+
+export function ImportTables(arg1) {
+  return window['go']['main']['App']['ImportTables'](arg1);
 }
 
 export function KillProcessByPID(arg1) {

@@ -210,6 +210,36 @@ type ExportResponse struct {
 	Path    string `json:"path"`
 }
 
+type ImportRequest struct {
+	ConnectionID   string   `json:"connection_id"`
+	Database       string   `json:"database"`
+	InputDir       string   `json:"input_dir"`
+	Threads        int      `json:"threads"`
+	Schema         string   `json:"schema"`
+	IncludeSchemas []string `json:"include_schemas"`
+	ExcludeSchemas []string `json:"exclude_schemas"`
+	IncludeTables  []string `json:"include_tables"`
+	ExcludeTables  []string `json:"exclude_tables"`
+	ResetProgress  bool     `json:"reset_progress"`
+	WaitTimeout    int      `json:"wait_timeout"`
+}
+
+type ImportResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Path    string `json:"path"`
+}
+
+type CheckImportConflictsRequest struct {
+	ConnectionID string `json:"connection_id"`
+	InputDir     string `json:"input_dir"`
+}
+
+type DropConflictingTablesRequest struct {
+	ConnectionID string                 `json:"connection_id"`
+	Conflicts    []tools.ImportConflict `json:"conflicts"`
+}
+
 func (a *App) ExportDatabases(req ExportRequest) (ExportResponse, error) {
 	log.Info("Exporting databases", "databases", req.Databases, "output", req.OutputDir)
 
@@ -298,4 +328,156 @@ func (a *App) ExportTables(req ExportRequest) (ExportResponse, error) {
 		Message: "导出成功",
 		Path:    req.OutputDir,
 	}, nil
+}
+
+func (a *App) ImportDatabases(req ImportRequest) (ImportResponse, error) {
+	log.Info("Importing databases", "input", req.InputDir)
+
+	if req.ConnectionID == "" {
+		return ImportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if req.InputDir == "" {
+		return ImportResponse{Success: false, Message: "导入目录不能为空"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ImportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+	config := tools.ImportConfig{
+		InputDir:       req.InputDir,
+		Threads:        req.Threads,
+		Schema:         req.Schema,
+		IncludeSchemas: req.IncludeSchemas,
+		ExcludeSchemas: req.ExcludeSchemas,
+		IncludeTables:  req.IncludeTables,
+		ExcludeTables:  req.ExcludeTables,
+		ResetProgress:  req.ResetProgress,
+		WaitTimeout:    req.WaitTimeout,
+	}
+
+	err = mysqlShellTool.ImportDatabases(conn, config)
+	if err != nil {
+		log.Error("Error importing databases", "input", req.InputDir, "error", err)
+		return ImportResponse{Success: false, Message: "导入失败: " + err.Error()}, nil
+	}
+
+	log.Info("Imported databases successfully", "input", req.InputDir)
+	return ImportResponse{
+		Success: true,
+		Message: "导入成功",
+		Path:    req.InputDir,
+	}, nil
+}
+
+func (a *App) ImportTables(req ImportRequest) (ImportResponse, error) {
+	log.Info("Importing tables", "database", req.Database, "input", req.InputDir)
+
+	if req.ConnectionID == "" {
+		return ImportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if req.InputDir == "" {
+		return ImportResponse{Success: false, Message: "导入目录不能为空"}, nil
+	}
+
+	if req.Database == "" {
+		return ImportResponse{Success: false, Message: "目标数据库不能为空"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ImportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+	config := tools.ImportConfig{
+		InputDir:      req.InputDir,
+		Threads:       req.Threads,
+		IncludeTables: req.IncludeTables,
+		ExcludeTables: req.ExcludeTables,
+		ResetProgress: req.ResetProgress,
+		WaitTimeout:   req.WaitTimeout,
+	}
+
+	err = mysqlShellTool.ImportTables(conn, req.Database, config)
+	if err != nil {
+		log.Error("Error importing tables", "database", req.Database, "input", req.InputDir, "error", err)
+		return ImportResponse{Success: false, Message: "导入失败: " + err.Error()}, nil
+	}
+
+	log.Info("Imported tables successfully", "database", req.Database, "input", req.InputDir)
+	return ImportResponse{
+		Success: true,
+		Message: "导入成功",
+		Path:    req.InputDir,
+	}, nil
+}
+
+func (a *App) CheckImportConflicts(req CheckImportConflictsRequest) (tools.ImportConflictCheckResult, error) {
+	log.Info("Checking import conflicts", "input", req.InputDir)
+
+	if req.ConnectionID == "" {
+		return tools.ImportConflictCheckResult{}, fmt.Errorf("连接ID不能为空")
+	}
+
+	if req.InputDir == "" {
+		return tools.ImportConflictCheckResult{}, fmt.Errorf("导入目录不能为空")
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return tools.ImportConflictCheckResult{}, fmt.Errorf("获取连接信息失败: %s", err.Error())
+	}
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+
+	_, schemaMetas, err := mysqlShellTool.ParseDumpMetadata(req.InputDir)
+	if err != nil {
+		log.Error("Error parsing dump metadata", "input", req.InputDir, "error", err)
+		return tools.ImportConflictCheckResult{}, err
+	}
+
+	result, err := mysqlShellTool.CheckExistingObjects(conn, schemaMetas)
+	if err != nil {
+		log.Error("Error checking existing objects", "input", req.InputDir, "error", err)
+		return tools.ImportConflictCheckResult{}, err
+	}
+
+	log.Info("Checked import conflicts", "has_conflicts", result.HasConflicts)
+	return *result, nil
+}
+
+func (a *App) DropConflictingTables(req DropConflictingTablesRequest) error {
+	log.Info("Dropping conflicting tables", "conflict_count", len(req.Conflicts))
+
+	if req.ConnectionID == "" {
+		return fmt.Errorf("连接ID不能为空")
+	}
+
+	if len(req.Conflicts) == 0 {
+		return nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return fmt.Errorf("获取连接信息失败: %s", err.Error())
+	}
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+	err = mysqlShellTool.DropObjects(conn, req.Conflicts)
+	if err != nil {
+		log.Error("Error dropping conflicting objects", "error", err)
+		return err
+	}
+
+	log.Info("Dropped conflicting tables successfully")
+	return nil
 }

@@ -73,6 +73,52 @@ export namespace config {
 
 export namespace main {
 	
+	export class CheckImportConflictsRequest {
+	    connection_id: string;
+	    input_dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CheckImportConflictsRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.input_dir = source["input_dir"];
+	    }
+	}
+	export class DropConflictingTablesRequest {
+	    connection_id: string;
+	    conflicts: tools.ImportConflict[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DropConflictingTablesRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.conflicts = this.convertValues(source["conflicts"], tools.ImportConflict);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ExportRequest {
 	    connection_id: string;
 	    databases: string[];
@@ -129,11 +175,113 @@ export namespace main {
 	        this.path = source["path"];
 	    }
 	}
+	export class ImportRequest {
+	    connection_id: string;
+	    database: string;
+	    input_dir: string;
+	    threads: number;
+	    schema: string;
+	    include_schemas: string[];
+	    exclude_schemas: string[];
+	    include_tables: string[];
+	    exclude_tables: string[];
+	    reset_progress: boolean;
+	    wait_timeout: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.database = source["database"];
+	        this.input_dir = source["input_dir"];
+	        this.threads = source["threads"];
+	        this.schema = source["schema"];
+	        this.include_schemas = source["include_schemas"];
+	        this.exclude_schemas = source["exclude_schemas"];
+	        this.include_tables = source["include_tables"];
+	        this.exclude_tables = source["exclude_tables"];
+	        this.reset_progress = source["reset_progress"];
+	        this.wait_timeout = source["wait_timeout"];
+	    }
+	}
+	export class ImportResponse {
+	    success: boolean;
+	    message: string;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.path = source["path"];
+	    }
+	}
 
 }
 
 export namespace tools {
 	
+	export class ImportConflict {
+	    schema: string;
+	    tables: string[];
+	    views: string[];
+	    events: string[];
+	    functions: string[];
+	    procedures: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportConflict(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.schema = source["schema"];
+	        this.tables = source["tables"];
+	        this.views = source["views"];
+	        this.events = source["events"];
+	        this.functions = source["functions"];
+	        this.procedures = source["procedures"];
+	    }
+	}
+	export class ImportConflictCheckResult {
+	    has_conflicts: boolean;
+	    conflicts: ImportConflict[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportConflictCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.has_conflicts = source["has_conflicts"];
+	        this.conflicts = this.convertValues(source["conflicts"], ImportConflict);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ProcessInfo {
 	    PID: number;
 	    Name: string;

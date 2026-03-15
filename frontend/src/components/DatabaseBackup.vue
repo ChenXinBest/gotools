@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
-import { AddDatabaseConnection, UpdateDatabaseConnection, GetDatabaseConnections, ListDatabases, ListTables, SelectFolder, GetExportSettings, SaveExportSettings, ExportDatabases, ExportTables } from "../../wailsjs/go/main/App";
+import { AddDatabaseConnection, UpdateDatabaseConnection, GetDatabaseConnections, ListDatabases, ListTables, SelectFolder, GetExportSettings, SaveExportSettings, ExportDatabases, ExportTables, ImportDatabases, ImportTables, CheckImportConflicts, DropConflictingTables } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import { FaSave, FaDownload } from "vue-icons-plus/fa";
+import { FaSave, FaDownload, FaUpload } from "vue-icons-plus/fa";
 
 const MYSQLSHELL_NOT_FOUND = "MYSQLSHELL_NOT_FOUND";
 const MYSQLSHELL_DOWNLOAD_URL = "https://dev.mysql.com/downloads/shell/";
@@ -54,6 +54,26 @@ const mysqlShellParams = ref({
 });
 const isLoadingTables = ref(false);
 
+const importPath = ref("");
+const importScope = ref("database");
+const importDatabase = ref("");
+const importTables = ref(new Set());
+const importParams = ref({
+    threads: 4,
+    schema: "",
+    resetProgress: true,
+    waitTimeout: 0,
+    includeSchemas: "",
+    excludeSchemas: "",
+    includeTables: "",
+    excludeTables: ""
+});
+const showImportConfigModal = ref(false);
+const isImporting = ref(false);
+const showConflictModal = ref(false);
+const importConflicts = ref([]);
+const pendingImportRequest = ref(null);
+
 // 配置保存状态
 const configSaveStatus = ref("idle"); // idle, saving, saved, error
 const configSaveMessage = ref("");
@@ -80,6 +100,20 @@ const canConfirmExport = computed(() => {
         return selectedDatabases.value.size > 0;
     } else if (exportScope.value === 'table') {
         return exportDatabase.value && exportTables.value.size > 0;
+    }
+    return false;
+});
+
+const canImport = computed(() => {
+    return currentConnection.value && importPath.value;
+});
+
+const canConfirmImport = computed(() => {
+    if (!importPath.value) return false;
+    if (importScope.value === 'database') {
+        return true;
+    } else if (importScope.value === 'table') {
+        return importDatabase.value;
     }
     return false;
 });
@@ -625,6 +659,161 @@ async function selectExportPath() {
     }
 }
 
+// 导入相关函数
+function handleImportClick() {
+    importScope.value = "database";
+    importDatabase.value = "";
+    importTables.value.clear();
+    importParams.value = {
+        threads: 4,
+        schema: "",
+        resetProgress: true,
+        waitTimeout: 0,
+        includeSchemas: "",
+        excludeSchemas: "",
+        includeTables: "",
+        excludeTables: ""
+    };
+    showImportConfigModal.value = true;
+}
+
+async function selectImportPath() {
+    try {
+        const path = await SelectFolder();
+        if (path) {
+            importPath.value = path;
+        }
+    } catch (err) {
+        console.error("选择目录失败:", err);
+        error.value = "选择目录失败: " + (err.message || err);
+    }
+}
+
+async function confirmImportConfig() {
+    showImportConfigModal.value = false;
+    
+    const conn = connections.value.find(c => c.name === currentConnection.value);
+    if (!conn) {
+        error.value = "请先选择数据库连接";
+        return;
+    }
+
+    isImporting.value = true;
+    error.value = "";
+
+    try {
+        const parseCommaSeparated = (str) => {
+            if (!str || !str.trim()) return [];
+            return str.split(',').map(s => s.trim()).filter(s => s);
+        };
+
+        const request = {
+            connection_id: conn.id,
+            database: importDatabase.value,
+            input_dir: importPath.value,
+            threads: importParams.value.threads,
+            schema: importParams.value.schema,
+            include_schemas: parseCommaSeparated(importParams.value.includeSchemas),
+            exclude_schemas: parseCommaSeparated(importParams.value.excludeSchemas),
+            include_tables: parseCommaSeparated(importParams.value.includeTables),
+            exclude_tables: parseCommaSeparated(importParams.value.excludeTables),
+            reset_progress: importParams.value.resetProgress,
+            wait_timeout: importParams.value.waitTimeout,
+        };
+
+        pendingImportRequest.value = request;
+
+        const conflictResult = await CheckImportConflicts({
+            connection_id: conn.id,
+            input_dir: importPath.value
+        });
+
+        if (conflictResult.has_conflicts && conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+            importConflicts.value = conflictResult.conflicts;
+            showConflictModal.value = true;
+            isImporting.value = false;
+            return;
+        }
+
+        await executeImport(request);
+    } catch (err) {
+        console.error("导入失败:", err);
+        const errorMsg = err.message || err || "";
+        if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
+            error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
+            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        error.value = "导入失败: " + errorMsg;
+        isImporting.value = false;
+    }
+}
+
+async function executeImport(request) {
+    isImporting.value = true;
+    error.value = "";
+
+    try {
+        let result;
+        if (importScope.value === 'database') {
+            result = await ImportDatabases(request);
+        } else if (importScope.value === 'table') {
+            result = await ImportTables(request);
+        }
+
+        if (result && result.success) {
+            showStatus(result.message || "导入成功");
+        } else {
+            error.value = result?.message || "导入失败";
+        }
+    } catch (err) {
+        console.error("导入失败:", err);
+        const errorMsg = err.message || err || "";
+        if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
+            error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
+            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        error.value = "导入失败: " + errorMsg;
+    } finally {
+        isImporting.value = false;
+        pendingImportRequest.value = null;
+    }
+}
+
+async function handleConflictResolution(deleteConflicts) {
+    showConflictModal.value = false;
+
+    if (!deleteConflicts) {
+        isImporting.value = false;
+        pendingImportRequest.value = null;
+        return;
+    }
+
+    const conn = connections.value.find(c => c.name === currentConnection.value);
+    if (!conn) {
+        error.value = "请先选择数据库连接";
+        isImporting.value = false;
+        return;
+    }
+
+    try {
+        await DropConflictingTables({
+            connection_id: conn.id,
+            conflicts: importConflicts.value
+        });
+        showStatus("已删除冲突表，正在导入...");
+        
+        if (pendingImportRequest.value) {
+            await executeImport(pendingImportRequest.value);
+        }
+    } catch (err) {
+        console.error("删除冲突表失败:", err);
+        error.value = "删除冲突表失败: " + (err.message || err);
+        isImporting.value = false;
+    }
+}
+
 onMounted(async () => {
     await loadConnections();
     await loadExportSettings();
@@ -890,24 +1079,12 @@ watch(mysqlShellParams, () => {
 
 <template>
     <div class="database-backup">
-        <div class="fixed-export-btn" :class="{ disabled: !canExport || loading }">
-            <button
-                @click="handleExportClick"
-                class="export-action-btn"
-                :disabled="!canExport || loading"
-            >
-                <span class="export-btn-icon">
-                    <component :is="FaDownload" />
-                </span>
-                <span class="export-btn-text">{{ loading ? "导出中..." : "导出" }}</span>
-            </button>
-        </div>
         <div class="db-header">
             <div class="db-title">
                 <span class="title-icon">
                     <component :is="FaSave" />
                 </span>
-                导出
+                数据库导入导出
             </div>
             <div class="db-stats">
                 <span class="stat-item">{{ connections.length }} 连接</span>
@@ -951,6 +1128,27 @@ watch(mysqlShellParams, () => {
                     :disabled="!currentConnection"
                 >
                     刷新
+                </button>
+                <div class="toolbar-divider"></div>
+                <button
+                    @click="handleImportClick"
+                    class="btn import-btn"
+                    :disabled="!currentConnection"
+                >
+                    <span class="btn-icon">
+                        <component :is="FaUpload" />
+                    </span>
+                    导入
+                </button>
+                <button
+                    @click="handleExportClick"
+                    class="btn export-btn"
+                    :disabled="!canExport || loading"
+                >
+                    <span class="btn-icon">
+                        <component :is="FaDownload" />
+                    </span>
+                    {{ loading ? "导出中..." : "导出" }}
                 </button>
             </div>
             <div class="export-settings">
@@ -1049,10 +1247,6 @@ watch(mysqlShellParams, () => {
                     已选择数据库: {{ selectedDatabase }}
                 </span>
                 <span v-else> 请选择要导出的数据库或表 </span>
-            </div>
-            <div class="export-hint">
-                <span class="hint-icon">↑</span>
-                <span>点击右上角按钮导出</span>
             </div>
         </div>
 
@@ -1393,6 +1587,201 @@ watch(mysqlShellParams, () => {
                 </div>
             </div>
         </div>
+
+        <!-- 导入配置模态框 -->
+        <div
+            v-if="showImportConfigModal"
+            class="modal-mask"
+            @click.self="showImportConfigModal = false"
+        >
+            <div class="modal-box import-config-modal">
+                <div class="modal-head">
+                    <span class="modal-icon">📥</span>
+                    导入配置
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>导入目录:</label>
+                        <div class="path-selector">
+                            <input
+                                v-model="importPath"
+                                type="text"
+                                class="form-input"
+                                readonly
+                                placeholder="选择包含导出文件的目录"
+                            />
+                            <button @click="selectImportPath" class="btn">
+                                选择
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>导入范围:</label>
+                        <div class="radio-group">
+                            <label class="radio-item">
+                                <input type="radio" value="database" v-model="importScope" />
+                                <span>数据库</span>
+                            </label>
+                            <label class="radio-item">
+                                <input type="radio" value="table" v-model="importScope" />
+                                <span>数据表</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div v-if="importScope === 'table'" class="form-group">
+                        <label>目标数据库:</label>
+                        <select v-model="importDatabase" class="select-input">
+                            <option value="">请选择数据库</option>
+                            <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <h4>MySQL Shell 参数配置</h4>
+                        <div class="param-group">
+                            <div class="param-item">
+                                <label>线程数 (1-32):</label>
+                                <input
+                                    v-model.number="importParams.threads"
+                                    type="number"
+                                    min="1"
+                                    max="32"
+                                    class="form-input small"
+                                />
+                            </div>
+                            <div class="param-item">
+                                <label>目标 Schema:</label>
+                                <input
+                                    v-model="importParams.schema"
+                                    type="text"
+                                    class="form-input small"
+                                    placeholder="可选"
+                                />
+                            </div>
+                            <div class="param-item">
+                                <label>等待超时 (秒):</label>
+                                <input
+                                    v-model.number="importParams.waitTimeout"
+                                    type="number"
+                                    min="0"
+                                    class="form-input small"
+                                    placeholder="0为默认"
+                                />
+                            </div>
+                            <div class="param-item">
+                                <label>
+                                    <input type="checkbox" v-model="importParams.resetProgress" />
+                                    重置进度
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <h4>高级过滤选项</h4>
+                        <div class="filter-grid">
+                            <div class="filter-item">
+                                <label>包含数据库 (逗号分隔):</label>
+                                <input
+                                    v-model="importParams.includeSchemas"
+                                    type="text"
+                                    class="form-input"
+                                    placeholder="如: db1, db2"
+                                />
+                            </div>
+                            <div class="filter-item">
+                                <label>排除数据库 (逗号分隔):</label>
+                                <input
+                                    v-model="importParams.excludeSchemas"
+                                    type="text"
+                                    class="form-input"
+                                    placeholder="如: mysql, sys"
+                                />
+                            </div>
+                            <div class="filter-item">
+                                <label>包含表 (逗号分隔):</label>
+                                <input
+                                    v-model="importParams.includeTables"
+                                    type="text"
+                                    class="form-input"
+                                    placeholder="如: users, orders"
+                                />
+                            </div>
+                            <div class="filter-item">
+                                <label>排除表 (逗号分隔):</label>
+                                <input
+                                    v-model="importParams.excludeTables"
+                                    type="text"
+                                    class="form-input"
+                                    placeholder="如: logs, temp_*"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button @click="showImportConfigModal = false" class="btn">
+                        取消
+                    </button>
+                    <button 
+                        @click="confirmImportConfig"
+                        class="btn primary"
+                        :disabled="!canConfirmImport || isImporting"
+                    >
+                        {{ isImporting ? "导入中..." : "确认导入" }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 冲突确认模态框 -->
+        <div
+            v-if="showConflictModal"
+            class="modal-mask"
+            @click.self="showConflictModal = false"
+        >
+            <div class="modal-box conflict-modal">
+                <div class="modal-head">
+                    <span class="modal-icon warn">⚠</span>
+                    检测到冲突
+                </div>
+                <div class="modal-body">
+                    <p class="conflict-warning">以下数据库对象已存在，导入将会失败：</p>
+                    <div class="conflict-list">
+                        <div v-for="conflict in importConflicts" :key="conflict.schema" class="conflict-item">
+                            <h4 class="conflict-schema">数据库: {{ conflict.schema }}</h4>
+                            <div v-if="conflict.tables && conflict.tables.length > 0" class="conflict-section">
+                                <span class="conflict-label">表 ({{ conflict.tables.length }}):</span>
+                                <div class="conflict-tags">
+                                    <span v-for="table in conflict.tables" :key="table" class="conflict-tag">
+                                        {{ table }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-if="conflict.views && conflict.views.length > 0" class="conflict-section">
+                                <span class="conflict-label">视图 ({{ conflict.views.length }}):</span>
+                                <div class="conflict-tags">
+                                    <span v-for="view in conflict.views" :key="view" class="conflict-tag">
+                                        {{ view }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="conflict-question">是否删除这些冲突对象后继续导入？</p>
+                </div>
+                <div class="modal-foot">
+                    <button @click="handleConflictResolution(false)" class="btn">
+                        取消导入
+                    </button>
+                    <button @click="handleConflictResolution(true)" class="btn danger">
+                        删除并继续导入
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -1406,69 +1795,6 @@ watch(mysqlShellParams, () => {
     font-family: "Consolas", "Monaco", monospace;
     overflow: hidden;
     position: relative;
-}
-
-.fixed-export-btn {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-.fixed-export-btn.disabled {
-    opacity: 0.5;
-}
-
-.export-action-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-    border: 2px solid #ff6b6b;
-    color: #ffffff;
-    padding: 12px 24px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4), 0 0 20px rgba(220, 53, 69, 0.2);
-    transition: all 0.3s ease;
-    letter-spacing: 1px;
-}
-
-.export-action-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #ff6b6b 0%, #dc3545 100%);
-    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6), 0 0 30px rgba(220, 53, 69, 0.3);
-    transform: translateY(-2px);
-}
-
-.export-action-btn:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 2px 10px rgba(220, 53, 69, 0.4);
-}
-
-.export-action-btn:disabled {
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-    border-color: #6c757d;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.export-btn-icon {
-    display: flex;
-    align-items: center;
-    font-size: 16px;
-}
-
-.export-btn-icon svg {
-    width: 18px;
-    height: 18px;
-}
-
-.export-btn-text {
-    white-space: nowrap;
 }
 
 .db-header {
@@ -1641,6 +1967,54 @@ watch(mysqlShellParams, () => {
     color: #0a0a0a;
 }
 
+.btn.primary {
+    border-color: #007bff;
+    color: #007bff;
+}
+
+.btn.primary:hover:not(:disabled) {
+    background: #007bff;
+    color: #0a0a0a;
+}
+
+.btn.export-btn {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.btn.export-btn:hover:not(:disabled) {
+    background: #dc3545;
+    color: #ffffff;
+}
+
+.btn.import-btn {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.btn.import-btn:hover:not(:disabled) {
+    background: #28a745;
+    color: #ffffff;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 4px;
+}
+
+.btn-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #333;
+    margin: 0 8px;
+}
+
 .msg-bar {
     display: flex;
     align-items: center;
@@ -1775,33 +2149,6 @@ watch(mysqlShellParams, () => {
     color: #666;
 }
 
-.export-hint {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: #444;
-    padding: 4px 10px;
-    background: rgba(255, 95, 86, 0.1);
-    border: 1px solid rgba(255, 95, 86, 0.2);
-    border-radius: 4px;
-}
-
-.hint-icon {
-    color: #ff5f56;
-    font-size: 12px;
-    animation: bounce 1.5s infinite;
-}
-
-@keyframes bounce {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-3px);
-    }
-}
-
 .modal-mask {
     position: fixed;
     top: 0;
@@ -1828,6 +2175,81 @@ watch(mysqlShellParams, () => {
     max-width: 800px;
     max-height: 80vh;
     overflow-y: auto;
+}
+
+.import-config-modal {
+    min-width: 600px;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.conflict-modal {
+    min-width: 500px;
+    max-width: 700px;
+}
+
+.conflict-warning {
+    color: #ff5f56;
+    margin-bottom: 15px;
+}
+
+.conflict-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.conflict-item {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.conflict-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.conflict-schema {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: #00ff00;
+}
+
+.conflict-section {
+    margin-bottom: 8px;
+}
+
+.conflict-label {
+    font-size: 11px;
+    color: #666;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.conflict-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.conflict-tag {
+    background: rgba(255, 95, 86, 0.2);
+    color: #ff5f56;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    border: 1px solid rgba(255, 95, 86, 0.3);
+}
+
+.conflict-question {
+    color: #ffbd2e;
+    font-weight: bold;
 }
 
 .modal-head {
@@ -2061,6 +2483,10 @@ watch(mysqlShellParams, () => {
         align-items: flex-start;
     }
 
+    .connection-selector {
+        flex-wrap: wrap;
+    }
+
     .export-settings {
         width: 100%;
     }
@@ -2069,60 +2495,44 @@ watch(mysqlShellParams, () => {
         width: 100%;
     }
 
-    .fixed-export-btn {
-        top: 10px;
-        right: 10px;
-    }
-
-    .export-action-btn {
-        padding: 10px 16px;
-        font-size: 12px;
-    }
-
-    .export-btn-icon svg {
-        width: 16px;
-        height: 16px;
-    }
-
     .db-footer {
         flex-direction: column;
         gap: 8px;
         align-items: flex-start;
     }
 
-    .export-hint {
-        width: 100%;
-        justify-content: center;
-    }
-
     .filter-grid {
         grid-template-columns: 1fr;
+    }
+
+    .export-config-modal,
+    .import-config-modal {
+        min-width: 95vw;
+        max-width: 95vw;
     }
 }
 
 @media (max-width: 480px) {
-    .fixed-export-btn {
-        top: 8px;
-        right: 8px;
+    .connection-selector {
+        gap: 6px;
     }
 
-    .export-action-btn {
-        padding: 8px 12px;
+    .btn {
+        padding: 5px 10px;
         font-size: 11px;
-        gap: 4px;
     }
 
-    .export-btn-text {
+    .btn-icon {
+        margin-right: 2px;
+    }
+
+    .btn-icon svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .toolbar-divider {
         display: none;
-    }
-
-    .export-btn-icon {
-        font-size: 18px;
-    }
-
-    .export-btn-icon svg {
-        width: 20px;
-        height: 20px;
     }
 }
 </style>

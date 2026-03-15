@@ -6,9 +6,13 @@ import {tools} from '../models';
 
 export function AddDatabaseConnection(arg1:config.DatabaseConnection):Promise<void>;
 
+export function CheckImportConflicts(arg1:main.CheckImportConflictsRequest):Promise<tools.ImportConflictCheckResult>;
+
 export function ConnectDatabase(arg1:config.DatabaseConnection):Promise<void>;
 
 export function DeleteDatabaseConnection(arg1:string):Promise<void>;
+
+export function DropConflictingTables(arg1:main.DropConflictingTablesRequest):Promise<void>;
 
 export function ExportDatabases(arg1:main.ExportRequest):Promise<main.ExportResponse>;
 
@@ -23,6 +27,10 @@ export function GetExportSettings():Promise<config.ExportSettings>;
 export function GetSystemProcessInfos():Promise<Array<tools.ProcessInfo>>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function ImportDatabases(arg1:main.ImportRequest):Promise<main.ImportResponse>;
+
+export function ImportTables(arg1:main.ImportRequest):Promise<main.ImportResponse>;
 
 export function KillProcessByPID(arg1:number):Promise<void>;
 
