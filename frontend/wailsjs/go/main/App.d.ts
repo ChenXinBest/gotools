@@ -16,7 +16,11 @@ export function DropConflictingTables(arg1:main.DropConflictingTablesRequest):Pr
 
 export function ExportDatabases(arg1:main.ExportRequest):Promise<main.ExportResponse>;
 
+export function ExportDatabasesMySQLDump(arg1:main.MySQLDumpExportRequest):Promise<main.ExportResponse>;
+
 export function ExportTables(arg1:main.ExportRequest):Promise<main.ExportResponse>;
+
+export function ExportTablesMySQLDump(arg1:main.MySQLDumpExportRequest):Promise<main.ExportResponse>;
 
 export function GetDatabaseConnection(arg1:string):Promise<config.DatabaseConnection>;
 
@@ -30,18 +34,28 @@ export function Greet(arg1:string):Promise<string>;
 
 export function ImportDatabases(arg1:main.ImportRequest):Promise<main.ImportResponse>;
 
+export function ImportDumpMySQLDump(arg1:main.MySQLDumpImportRequest):Promise<main.ImportResponse>;
+
 export function ImportTables(arg1:main.ImportRequest):Promise<main.ImportResponse>;
 
 export function KillProcessByPID(arg1:number):Promise<void>;
 
 export function ListDatabases(arg1:config.DatabaseConnection):Promise<Array<string>>;
 
+export function ListDatabasesMySQLDump(arg1:config.DatabaseConnection):Promise<Array<string>>;
+
 export function ListTables(arg1:config.DatabaseConnection):Promise<Array<string>>;
+
+export function ListTablesMySQLDump(arg1:config.DatabaseConnection):Promise<Array<string>>;
 
 export function SaveExportSettings(arg1:config.ExportSettings):Promise<void>;
 
 export function SearchPidByKeyWord(arg1:string):Promise<tools.ProcessInfo>;
 
+export function SelectFile():Promise<string>;
+
 export function SelectFolder():Promise<string>;
+
+export function SelectSaveFile(arg1:string):Promise<string>;
 
 export function UpdateDatabaseConnection(arg1:config.DatabaseConnection):Promise<void>;

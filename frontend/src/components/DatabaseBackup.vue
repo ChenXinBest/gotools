@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
-import { AddDatabaseConnection, UpdateDatabaseConnection, GetDatabaseConnections, ListDatabases, ListTables, SelectFolder, GetExportSettings, SaveExportSettings, ExportDatabases, ExportTables, ImportDatabases, ImportTables, CheckImportConflicts, DropConflictingTables } from "../../wailsjs/go/main/App";
+import { AddDatabaseConnection, UpdateDatabaseConnection, GetDatabaseConnections, ListDatabases, ListTables, SelectFolder, SelectFile, SelectSaveFile, GetExportSettings, SaveExportSettings, ExportDatabases, ExportTables, ImportDatabases, ImportTables, CheckImportConflicts, DropConflictingTables, ListDatabasesMySQLDump, ListTablesMySQLDump, ExportDatabasesMySQLDump, ExportTablesMySQLDump, ImportDumpMySQLDump } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { FaSave, FaDownload, FaUpload } from "vue-icons-plus/fa";
 
@@ -52,6 +52,13 @@ const mysqlShellParams = ref({
     includeTables: "",
     excludeTables: ""
 });
+const mysqlDumpParams = ref({
+    compression: "gzip",
+    singleTransaction: true,
+    routines: true,
+    events: false,
+    overwrite: true
+});
 const isLoadingTables = ref(false);
 
 const importPath = ref("");
@@ -67,6 +74,9 @@ const importParams = ref({
     excludeSchemas: "",
     includeTables: "",
     excludeTables: ""
+});
+const mysqlDumpImportParams = ref({
+    database: ""
 });
 const showImportConfigModal = ref(false);
 const isImporting = ref(false);
@@ -110,6 +120,9 @@ const canImport = computed(() => {
 
 const canConfirmImport = computed(() => {
     if (!importPath.value) return false;
+    if (exportTool.value === 'mysqldump') {
+        return true;
+    }
     if (importScope.value === 'database') {
         return true;
     } else if (importScope.value === 'table') {
@@ -186,35 +199,33 @@ async function refreshConnection() {
             return;
         }
 
-        if (exportTool.value === "mysql-shell") {
-            const connData = {
-                id: conn.id,
-                name: conn.name,
-                host: conn.host,
-                port: conn.port,
-                user: conn.user,
-                password: conn.password,
-                database: conn.defaultSchema
-            };
+        const connData = {
+            id: conn.id,
+            name: conn.name,
+            host: conn.host,
+            port: conn.port,
+            user: conn.user,
+            password: conn.password,
+            database: conn.defaultSchema
+        };
 
+        if (exportTool.value === "mysql-shell") {
             databases.value = await ListDatabases(connData);
-            showStatus(`已刷新 ${currentConnection.value} 的数据库信息`);
         } else {
-            databases.value = [
-                "information_schema",
-                "mysql",
-                "performance_schema",
-                "sys",
-                "test",
-            ];
-            showStatus(`已刷新 ${currentConnection.value} 的数据库信息`);
+            databases.value = await ListDatabasesMySQLDump(connData);
         }
+        showStatus(`已刷新 ${currentConnection.value} 的数据库信息`);
     } catch (err) {
         console.error("刷新数据库信息失败:", err);
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
             BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        if (errorMsg.includes("MYSQLDUMP_NOT_FOUND")) {
+            error.value = "未找到 mysqldump 命令，请先安装 MySQL 客户端工具";
+            BrowserOpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "刷新失败: " + errorMsg;
@@ -310,29 +321,23 @@ async function selectDatabase(db) {
     selectedTables.value.clear();
 
     try {
-        if (exportTool.value === "mysql-shell") {
-            const conn = connections.value.find(c => c.name === currentConnection.value);
-            if (conn) {
-                const connData = {
-                    id: conn.id,
-                    name: conn.name,
-                    host: conn.host,
-                    port: conn.port,
-                    user: conn.user,
-                    password: conn.password,
-                    database: db
-                };
+        const conn = connections.value.find(c => c.name === currentConnection.value);
+        if (conn) {
+            const connData = {
+                id: conn.id,
+                name: conn.name,
+                host: conn.host,
+                port: conn.port,
+                user: conn.user,
+                password: conn.password,
+                database: db
+            };
 
+            if (exportTool.value === "mysql-shell") {
                 tables.value = await ListTables(connData);
+            } else {
+                tables.value = await ListTablesMySQLDump(connData);
             }
-        } else {
-            tables.value = [
-                "users",
-                "orders",
-                "products",
-                "categories",
-                "transactions",
-            ];
         }
     } catch (err) {
         console.error("获取表列表失败:", err);
@@ -340,6 +345,11 @@ async function selectDatabase(db) {
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
             BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        if (errorMsg.includes("MYSQL_NOT_FOUND")) {
+            error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
+            BrowserOpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "获取表列表失败: " + errorMsg;
@@ -463,28 +473,31 @@ function showStatus(msg) {
 
 // 处理导出按钮点击
 function handleExportClick() {
-    if (exportTool.value === "mysql-shell") {
-        // 重置导出配置
-        exportScope.value = "database";
-        selectedDatabases.value.clear();
-        exportDatabase.value = "";
-        exportTables.value.clear();
-        mysqlShellParams.value = {
-            threads: 4,
-            compression: "gzip",
-            chunkSize: "",
-            skipDefiner: true,
-            skipBinlog: false,
-            overwrite: true,
-            includeSchemas: "",
-            excludeSchemas: "",
-            includeTables: "",
-            excludeTables: ""
-        };
-        showExportConfigModal.value = true;
-    } else {
-        exportData();
-    }
+    // 重置导出配置
+    exportScope.value = "database";
+    selectedDatabases.value.clear();
+    exportDatabase.value = "";
+    exportTables.value.clear();
+    mysqlShellParams.value = {
+        threads: 4,
+        compression: "gzip",
+        chunkSize: "",
+        skipDefiner: true,
+        skipBinlog: false,
+        overwrite: true,
+        includeSchemas: "",
+        excludeSchemas: "",
+        includeTables: "",
+        excludeTables: ""
+    };
+    mysqlDumpParams.value = {
+        compression: "gzip",
+        singleTransaction: true,
+        routines: true,
+        events: false,
+        overwrite: true
+    };
+    showExportConfigModal.value = true;
 }
 
 // 切换数据库选择
@@ -518,29 +531,23 @@ async function loadExportTables() {
     exportTables.value.clear();
 
     try {
-        if (exportTool.value === "mysql-shell") {
-            const conn = connections.value.find(c => c.name === currentConnection.value);
-            if (conn) {
-                const connData = {
-                    id: conn.id,
-                    name: conn.name,
-                    host: conn.host,
-                    port: conn.port,
-                    user: conn.user,
-                    password: conn.password,
-                    database: exportDatabase.value
-                };
+        const conn = connections.value.find(c => c.name === currentConnection.value);
+        if (conn) {
+            const connData = {
+                id: conn.id,
+                name: conn.name,
+                host: conn.host,
+                port: conn.port,
+                user: conn.user,
+                password: conn.password,
+                database: exportDatabase.value
+            };
 
+            if (exportTool.value === "mysql-shell") {
                 tables.value = await ListTables(connData);
+            } else {
+                tables.value = await ListTablesMySQLDump(connData);
             }
-        } else {
-            tables.value = [
-                "users",
-                "orders",
-                "products",
-                "categories",
-                "transactions",
-            ];
         }
     } catch (err) {
         console.error("获取表列表失败:", err);
@@ -548,6 +555,11 @@ async function loadExportTables() {
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
             BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        if (errorMsg.includes("MYSQL_NOT_FOUND")) {
+            error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
+            BrowserOpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "获取表列表失败: " + errorMsg;
@@ -601,29 +613,51 @@ async function confirmExportConfig() {
             return str.split(',').map(s => s.trim()).filter(s => s);
         };
 
-        const request = {
-            connection_id: conn.id,
-            databases: Array.from(selectedDatabases.value),
-            database: exportDatabase.value,
-            tables: Array.from(exportTables.value),
-            output_dir: exportPath.value,
-            threads: mysqlShellParams.value.threads,
-            compression: mysqlShellParams.value.compression,
-            chunk_size: mysqlShellParams.value.chunkSize,
-            skip_definer: mysqlShellParams.value.skipDefiner,
-            skip_binlog: mysqlShellParams.value.skipBinlog,
-            overwrite: mysqlShellParams.value.overwrite,
-            include_schemas: parseCommaSeparated(mysqlShellParams.value.includeSchemas),
-            exclude_schemas: parseCommaSeparated(mysqlShellParams.value.excludeSchemas),
-            include_tables: parseCommaSeparated(mysqlShellParams.value.includeTables),
-            exclude_tables: parseCommaSeparated(mysqlShellParams.value.excludeTables),
-        };
-
         let result;
-        if (exportScope.value === 'database') {
-            result = await ExportDatabases(request);
-        } else if (exportScope.value === 'table') {
-            result = await ExportTables(request);
+        
+        if (exportTool.value === "mysql-shell") {
+            const request = {
+                connection_id: conn.id,
+                databases: Array.from(selectedDatabases.value),
+                database: exportDatabase.value,
+                tables: Array.from(exportTables.value),
+                output_dir: exportPath.value,
+                threads: mysqlShellParams.value.threads,
+                compression: mysqlShellParams.value.compression,
+                chunk_size: mysqlShellParams.value.chunkSize,
+                skip_definer: mysqlShellParams.value.skipDefiner,
+                skip_binlog: mysqlShellParams.value.skipBinlog,
+                overwrite: mysqlShellParams.value.overwrite,
+                include_schemas: parseCommaSeparated(mysqlShellParams.value.includeSchemas),
+                exclude_schemas: parseCommaSeparated(mysqlShellParams.value.excludeSchemas),
+                include_tables: parseCommaSeparated(mysqlShellParams.value.includeTables),
+                exclude_tables: parseCommaSeparated(mysqlShellParams.value.excludeTables),
+            };
+
+            if (exportScope.value === 'database') {
+                result = await ExportDatabases(request);
+            } else if (exportScope.value === 'table') {
+                result = await ExportTables(request);
+            }
+        } else {
+            const mysqldumpRequest = {
+                connection_id: conn.id,
+                databases: Array.from(selectedDatabases.value),
+                database: exportDatabase.value,
+                tables: Array.from(exportTables.value),
+                output_dir: exportPath.value,
+                compression: mysqlDumpParams.value.compression,
+                single_transaction: mysqlDumpParams.value.singleTransaction,
+                routines: mysqlDumpParams.value.routines,
+                events: mysqlDumpParams.value.events,
+                overwrite: mysqlDumpParams.value.overwrite,
+            };
+
+            if (exportScope.value === 'database') {
+                result = await ExportDatabasesMySQLDump(mysqldumpRequest);
+            } else if (exportScope.value === 'table') {
+                result = await ExportTablesMySQLDump(mysqldumpRequest);
+            }
         }
 
         if (result && result.success) {
@@ -637,6 +671,11 @@ async function confirmExportConfig() {
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
             BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            return;
+        }
+        if (errorMsg.includes("MYSQLDUMP_NOT_FOUND")) {
+            error.value = "未找到 mysqldump 命令，请先安装 MySQL 客户端工具";
+            BrowserOpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "导出失败: " + errorMsg;
@@ -674,14 +713,24 @@ function handleImportClick() {
         includeTables: "",
         excludeTables: ""
     };
+    mysqlDumpImportParams.value = {
+        database: ""
+    };
     showImportConfigModal.value = true;
 }
 
 async function selectImportPath() {
     try {
-        const path = await SelectFolder();
-        if (path) {
-            importPath.value = path;
+        if (exportTool.value === "mysqldump") {
+            const path = await SelectFile();
+            if (path) {
+                importPath.value = path;
+            }
+        } else {
+            const path = await SelectFolder();
+            if (path) {
+                importPath.value = path;
+            }
         }
     } catch (err) {
         console.error("选择目录失败:", err);
@@ -702,6 +751,24 @@ async function confirmImportConfig() {
     error.value = "";
 
     try {
+        if (exportTool.value === "mysqldump") {
+            const mysqldumpRequest = {
+                connection_id: conn.id,
+                input_file: importPath.value,
+                database: mysqlDumpImportParams.value.database || importDatabase.value,
+            };
+
+            const result = await ImportDumpMySQLDump(mysqldumpRequest);
+
+            if (result && result.success) {
+                showStatus(result.message || "导入成功");
+            } else {
+                error.value = result?.message || "导入失败";
+            }
+            isImporting.value = false;
+            return;
+        }
+
         const parseCommaSeparated = (str) => {
             if (!str || !str.trim()) return [];
             return str.split(',').map(s => s.trim()).filter(s => s);
@@ -742,6 +809,13 @@ async function confirmImportConfig() {
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
             BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            isImporting.value = false;
+            return;
+        }
+        if (errorMsg.includes("MYSQL_NOT_FOUND")) {
+            error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
+            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            isImporting.value = false;
             return;
         }
         error.value = "导入失败: " + errorMsg;
@@ -1479,7 +1553,7 @@ watch(mysqlShellParams, () => {
                     </div>
 
                     <!-- MySQL Shell 参数配置 -->
-                    <div class="form-group">
+                    <div v-if="exportTool === 'mysql-shell'" class="form-group">
                         <h4>MySQL Shell 参数配置</h4>
                         <div class="param-group">
                             <div class="param-item">
@@ -1530,8 +1604,46 @@ watch(mysqlShellParams, () => {
                         </div>
                     </div>
 
-                    <!-- 高级过滤选项 -->
-                    <div class="form-group">
+                    <!-- mysqldump 参数配置 -->
+                    <div v-else class="form-group">
+                        <h4>mysqldump 参数配置</h4>
+                        <div class="param-group">
+                            <div class="param-item">
+                                <label>压缩方式:</label>
+                                <select v-model="mysqlDumpParams.compression" class="select-input small">
+                                    <option value="gzip">gzip (推荐)</option>
+                                    <option value="none">无压缩</option>
+                                </select>
+                            </div>
+                            <div class="param-item">
+                                <label>
+                                    <input type="checkbox" v-model="mysqlDumpParams.singleTransaction" />
+                                    单事务 (InnoDB安全)
+                                </label>
+                            </div>
+                            <div class="param-item">
+                                <label>
+                                    <input type="checkbox" v-model="mysqlDumpParams.routines" />
+                                    包含存储过程
+                                </label>
+                            </div>
+                            <div class="param-item">
+                                <label>
+                                    <input type="checkbox" v-model="mysqlDumpParams.events" />
+                                    包含事件
+                                </label>
+                            </div>
+                            <div class="param-item">
+                                <label>
+                                    <input type="checkbox" v-model="mysqlDumpParams.overwrite" />
+                                    覆盖已存在文件
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 高级过滤选项 (仅MySQL Shell) -->
+                    <div v-if="exportTool === 'mysql-shell'" class="form-group">
                         <h4>高级过滤选项</h4>
                         <div class="filter-grid">
                             <div class="filter-item">
@@ -1601,14 +1713,14 @@ watch(mysqlShellParams, () => {
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>导入目录:</label>
+                        <label>导入{{ exportTool === 'mysqldump' ? '文件' : '目录' }}:</label>
                         <div class="path-selector">
                             <input
                                 v-model="importPath"
                                 type="text"
                                 class="form-input"
                                 readonly
-                                placeholder="选择包含导出文件的目录"
+                                :placeholder="exportTool === 'mysqldump' ? '选择SQL文件' : '选择包含导出文件的目录'"
                             />
                             <button @click="selectImportPath" class="btn">
                                 选择
@@ -1616,7 +1728,7 @@ watch(mysqlShellParams, () => {
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div v-if="exportTool === 'mysql-shell'" class="form-group">
                         <label>导入范围:</label>
                         <div class="radio-group">
                             <label class="radio-item">
@@ -1630,7 +1742,7 @@ watch(mysqlShellParams, () => {
                         </div>
                     </div>
 
-                    <div v-if="importScope === 'table'" class="form-group">
+                    <div v-if="exportTool === 'mysql-shell' && importScope === 'table'" class="form-group">
                         <label>目标数据库:</label>
                         <select v-model="importDatabase" class="select-input">
                             <option value="">请选择数据库</option>
@@ -1638,7 +1750,19 @@ watch(mysqlShellParams, () => {
                         </select>
                     </div>
 
-                    <div class="form-group">
+                    <!-- mysqldump 导入参数 -->
+                    <div v-if="exportTool === 'mysqldump'" class="form-group">
+                        <label>目标数据库 (可选):</label>
+                        <input
+                            v-model="mysqlDumpImportParams.database"
+                            type="text"
+                            class="form-input"
+                            placeholder="留空则按SQL文件内容导入"
+                        />
+                    </div>
+
+                    <!-- MySQL Shell 参数配置 -->
+                    <div v-if="exportTool === 'mysql-shell'" class="form-group">
                         <h4>MySQL Shell 参数配置</h4>
                         <div class="param-group">
                             <div class="param-item">

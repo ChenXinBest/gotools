@@ -26,8 +26,16 @@ export function ExportDatabases(arg1) {
   return window['go']['main']['App']['ExportDatabases'](arg1);
 }
 
+export function ExportDatabasesMySQLDump(arg1) {
+  return window['go']['main']['App']['ExportDatabasesMySQLDump'](arg1);
+}
+
 export function ExportTables(arg1) {
   return window['go']['main']['App']['ExportTables'](arg1);
+}
+
+export function ExportTablesMySQLDump(arg1) {
+  return window['go']['main']['App']['ExportTablesMySQLDump'](arg1);
 }
 
 export function GetDatabaseConnection(arg1) {
@@ -54,6 +62,10 @@ export function ImportDatabases(arg1) {
   return window['go']['main']['App']['ImportDatabases'](arg1);
 }
 
+export function ImportDumpMySQLDump(arg1) {
+  return window['go']['main']['App']['ImportDumpMySQLDump'](arg1);
+}
+
 export function ImportTables(arg1) {
   return window['go']['main']['App']['ImportTables'](arg1);
 }
@@ -66,8 +78,16 @@ export function ListDatabases(arg1) {
   return window['go']['main']['App']['ListDatabases'](arg1);
 }
 
+export function ListDatabasesMySQLDump(arg1) {
+  return window['go']['main']['App']['ListDatabasesMySQLDump'](arg1);
+}
+
 export function ListTables(arg1) {
   return window['go']['main']['App']['ListTables'](arg1);
+}
+
+export function ListTablesMySQLDump(arg1) {
+  return window['go']['main']['App']['ListTablesMySQLDump'](arg1);
 }
 
 export function SaveExportSettings(arg1) {
@@ -78,8 +98,16 @@ export function SearchPidByKeyWord(arg1) {
   return window['go']['main']['App']['SearchPidByKeyWord'](arg1);
 }
 
+export function SelectFile() {
+  return window['go']['main']['App']['SelectFile']();
+}
+
 export function SelectFolder() {
   return window['go']['main']['App']['SelectFolder']();
+}
+
+export function SelectSaveFile(arg1) {
+  return window['go']['main']['App']['SelectSaveFile'](arg1);
 }
 
 export function UpdateDatabaseConnection(arg1) {

@@ -223,6 +223,52 @@ export namespace main {
 	        this.path = source["path"];
 	    }
 	}
+	export class MySQLDumpExportRequest {
+	    connection_id: string;
+	    databases: string[];
+	    database: string;
+	    tables: string[];
+	    output_dir: string;
+	    compression: string;
+	    single_transaction: boolean;
+	    routines: boolean;
+	    events: boolean;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MySQLDumpExportRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.databases = source["databases"];
+	        this.database = source["database"];
+	        this.tables = source["tables"];
+	        this.output_dir = source["output_dir"];
+	        this.compression = source["compression"];
+	        this.single_transaction = source["single_transaction"];
+	        this.routines = source["routines"];
+	        this.events = source["events"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
+	export class MySQLDumpImportRequest {
+	    connection_id: string;
+	    input_file: string;
+	    database: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MySQLDumpImportRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.input_file = source["input_file"];
+	        this.database = source["database"];
+	    }
+	}
 
 }
 

@@ -164,6 +164,16 @@ func (a *App) SelectFolder() (string, error) {
 	return tools.SelectFolder()
 }
 
+// SelectFile 打开系统文件选择对话框
+func (a *App) SelectFile() (string, error) {
+	return tools.SelectFile()
+}
+
+// SelectSaveFile 打开系统保存文件对话框
+func (a *App) SelectSaveFile(defaultName string) (string, error) {
+	return tools.SelectSaveFile(defaultName)
+}
+
 func (a *App) GetExportSettings() (tools.ExportSettings, error) {
 	log.Info("Getting export settings")
 	settings, err := tools.GetExportSettings()
@@ -480,4 +490,184 @@ func (a *App) DropConflictingTables(req DropConflictingTablesRequest) error {
 
 	log.Info("Dropped conflicting tables successfully")
 	return nil
+}
+
+// ==================== mysqldump 相关方法 ====================
+
+// ListDatabasesMySQLDump 使用 mysqldump 工具查询数据库列表
+func (a *App) ListDatabasesMySQLDump(conn tools.DatabaseConnection) ([]string, error) {
+	log.Info("Listing databases using mysqldump", "host", conn.Host)
+	mysqlDumpTool := tools.NewMySQLDumpTool()
+	databases, err := mysqlDumpTool.ListDatabases(conn)
+	if err != nil {
+		log.Error("Error listing databases", "host", conn.Host, "error", err)
+		return nil, err
+	}
+	log.Info("Listed databases successfully", "host", conn.Host, "count", len(databases))
+	return databases, nil
+}
+
+// ListTablesMySQLDump 使用 mysqldump 工具查询表列表
+func (a *App) ListTablesMySQLDump(conn tools.DatabaseConnection) ([]string, error) {
+	log.Info("Listing tables using mysqldump", "host", conn.Host, "database", conn.Database)
+	mysqlDumpTool := tools.NewMySQLDumpTool()
+	tables, err := mysqlDumpTool.ListTables(conn)
+	if err != nil {
+		log.Error("Error listing tables", "host", conn.Host, "database", conn.Database, "error", err)
+		return nil, err
+	}
+	log.Info("Listed tables successfully", "host", conn.Host, "database", conn.Database, "count", len(tables))
+	return tables, nil
+}
+
+type MySQLDumpExportRequest struct {
+	ConnectionID      string   `json:"connection_id"`
+	Databases         []string `json:"databases"`
+	Database          string   `json:"database"`
+	Tables            []string `json:"tables"`
+	OutputDir         string   `json:"output_dir"`
+	Compression       string   `json:"compression"`
+	SingleTransaction bool     `json:"single_transaction"`
+	Routines          bool     `json:"routines"`
+	Events            bool     `json:"events"`
+	Overwrite         bool     `json:"overwrite"`
+}
+
+type MySQLDumpImportRequest struct {
+	ConnectionID string `json:"connection_id"`
+	InputFile    string `json:"input_file"`
+	Database     string `json:"database"`
+}
+
+// ExportDatabasesMySQLDump 使用 mysqldump 导出多个数据库
+func (a *App) ExportDatabasesMySQLDump(req MySQLDumpExportRequest) (ExportResponse, error) {
+	log.Info("Exporting databases using mysqldump", "databases", req.Databases, "output", req.OutputDir)
+
+	if req.ConnectionID == "" {
+		return ExportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if len(req.Databases) == 0 {
+		return ExportResponse{Success: false, Message: "请选择要导出的数据库"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ExportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	mysqlDumpTool := tools.NewMySQLDumpTool()
+	config := tools.MySQLDumpConfig{
+		OutputDir:         req.OutputDir,
+		Compression:       req.Compression,
+		SingleTransaction: req.SingleTransaction,
+		Routines:          req.Routines,
+		Events:            req.Events,
+		Overwrite:         req.Overwrite,
+	}
+
+	if len(req.Databases) == 1 {
+		err = mysqlDumpTool.ExportDatabase(conn, req.Databases[0], config)
+	} else {
+		err = mysqlDumpTool.ExportDatabases(conn, req.Databases, config)
+	}
+
+	if err != nil {
+		log.Error("Error exporting databases", "databases", req.Databases, "error", err)
+		return ExportResponse{Success: false, Message: "导出失败: " + err.Error()}, nil
+	}
+
+	log.Info("Exported databases successfully", "databases", req.Databases, "output", req.OutputDir)
+	return ExportResponse{
+		Success: true,
+		Message: "导出成功",
+		Path:    req.OutputDir,
+	}, nil
+}
+
+// ExportTablesMySQLDump 使用 mysqldump 导出指定表
+func (a *App) ExportTablesMySQLDump(req MySQLDumpExportRequest) (ExportResponse, error) {
+	log.Info("Exporting tables using mysqldump", "database", req.Database, "tables", req.Tables, "output", req.OutputDir)
+
+	if req.ConnectionID == "" {
+		return ExportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if req.Database == "" {
+		return ExportResponse{Success: false, Message: "数据库名不能为空"}, nil
+	}
+
+	if len(req.Tables) == 0 {
+		return ExportResponse{Success: false, Message: "请选择要导出的表"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ExportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	conn.Database = req.Database
+
+	mysqlDumpTool := tools.NewMySQLDumpTool()
+	config := tools.MySQLDumpConfig{
+		OutputDir:         req.OutputDir,
+		Compression:       req.Compression,
+		SingleTransaction: req.SingleTransaction,
+		Routines:          req.Routines,
+		Events:            req.Events,
+		Overwrite:         req.Overwrite,
+	}
+
+	err = mysqlDumpTool.ExportTables(conn, req.Database, req.Tables, config)
+	if err != nil {
+		log.Error("Error exporting tables", "database", req.Database, "tables", req.Tables, "error", err)
+		return ExportResponse{Success: false, Message: "导出失败: " + err.Error()}, nil
+	}
+
+	log.Info("Exported tables successfully", "database", req.Database, "tables", req.Tables, "output", req.OutputDir)
+	return ExportResponse{
+		Success: true,
+		Message: "导出成功",
+		Path:    req.OutputDir,
+	}, nil
+}
+
+// ImportDumpMySQLDump 使用 mysql 导入 SQL 文件
+func (a *App) ImportDumpMySQLDump(req MySQLDumpImportRequest) (ImportResponse, error) {
+	log.Info("Importing dump file using mysql", "input", req.InputFile, "database", req.Database)
+
+	if req.ConnectionID == "" {
+		return ImportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if req.InputFile == "" {
+		return ImportResponse{Success: false, Message: "输入文件不能为空"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ImportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	mysqlDumpTool := tools.NewMySQLDumpTool()
+	config := tools.MySQLImportConfig{
+		InputFile: req.InputFile,
+		Database:  req.Database,
+	}
+
+	err = mysqlDumpTool.ImportDump(conn, config)
+	if err != nil {
+		log.Error("Error importing dump file", "input", req.InputFile, "error", err)
+		return ImportResponse{Success: false, Message: "导入失败: " + err.Error()}, nil
+	}
+
+	log.Info("Imported dump file successfully", "input", req.InputFile, "database", req.Database)
+	return ImportResponse{
+		Success: true,
+		Message: "导入成功",
+		Path:    req.InputFile,
+	}, nil
 }
