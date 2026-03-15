@@ -1,31 +1,57 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
 	"gotools/internal/log"
+	"os"
 	"os/exec"
-	"regexp"
+	"path/filepath"
 	"strings"
 )
 
-// MySQLShellTool 提供 mysqlshell 相关功能
+const (
+	ErrMySQLShellNotFound = "MYSQLSHELL_NOT_FOUND"
+	MySQLShellDownloadURL = "https://dev.mysql.com/downloads/shell/"
+)
+
 type MySQLShellTool struct{}
 
-// NewMySQLShellTool 创建一个新的 MySQLShellTool 实例
+type ExportConfig struct {
+	OutputDir      string
+	Threads        int
+	ChunkSize      string
+	Compression    string
+	IncludeSchemas []string
+	ExcludeSchemas []string
+	IncludeTables  []string
+	ExcludeTables  []string
+	Overwrite      bool
+}
+
 func NewMySQLShellTool() *MySQLShellTool {
 	log.Info("Creating new MySQLShellTool instance")
 	return &MySQLShellTool{}
 }
 
-// ConnectDatabase 使用 mysqlshell 连接数据库
+func (m *MySQLShellTool) checkMySQLShellExists() error {
+	_, err := exec.LookPath("mysqlsh")
+	if err != nil {
+		log.Error("mysqlsh command not found", "error", err)
+		return fmt.Errorf("%s: 未找到 mysqlsh 命令，请先安装 MySQL Shell", ErrMySQLShellNotFound)
+	}
+	return nil
+}
+
 func (m *MySQLShellTool) ConnectDatabase(conn DatabaseConnection) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
 	log.Info("Connecting to database using mysqlshell", "host", conn.Host, "port", conn.Port, "database", conn.Database)
-	// 构建连接命令
 	cmd := exec.Command("mysqlsh",
 		"--uri", fmt.Sprintf("%s:%s@%s:%d/%s", conn.User, conn.Password, conn.Host, conn.Port, conn.Database),
 		"--execute", "SELECT 1;")
 
-	// 执行命令
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -37,16 +63,16 @@ func (m *MySQLShellTool) ConnectDatabase(conn DatabaseConnection) error {
 	return nil
 }
 
-// ListDatabases 查询数据库列表
 func (m *MySQLShellTool) ListDatabases(conn DatabaseConnection) ([]string, error) {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return nil, err
+	}
 	log.Info("Listing databases using mysqlshell", "host", conn.Host, "port", conn.Port)
-	// 构建查询命令
 	cmd := exec.Command("mysqlsh",
 		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
 		"--execute", "SHOW DATABASES;",
 		"--json")
 
-	// 执行命令
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -54,7 +80,6 @@ func (m *MySQLShellTool) ListDatabases(conn DatabaseConnection) ([]string, error
 		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
 	}
 
-	// 解析输出
 	databases, err := m.parseSchemasOutput(string(output))
 	if err != nil {
 		log.Error("Error parsing database list output", "error", err)
@@ -65,16 +90,16 @@ func (m *MySQLShellTool) ListDatabases(conn DatabaseConnection) ([]string, error
 	return databases, nil
 }
 
-// ListTables 查询指定数据库下的表列表
 func (m *MySQLShellTool) ListTables(conn DatabaseConnection) ([]string, error) {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return nil, err
+	}
 	log.Info("Listing tables using mysqlshell", "host", conn.Host, "port", conn.Port, "database", conn.Database)
-	// 构建查询命令
 	cmd := exec.Command("mysqlsh",
 		"--uri", fmt.Sprintf("%s:%s@%s:%d/%s", conn.User, conn.Password, conn.Host, conn.Port, conn.Database),
 		"--execute", "SHOW TABLES;",
 		"--json")
 
-	// 执行命令
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -82,8 +107,7 @@ func (m *MySQLShellTool) ListTables(conn DatabaseConnection) ([]string, error) {
 		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
 	}
 
-	// 解析输出
-	tables, err := m.parseJSONOutput(string(output))
+	tables, err := m.parseTablesOutput(string(output))
 	if err != nil {
 		log.Error("Error parsing table list output", "error", err)
 		return nil, err
@@ -95,77 +119,373 @@ func (m *MySQLShellTool) ListTables(conn DatabaseConnection) ([]string, error) {
 
 // 爬取数据库信息
 func (m *MySQLShellTool) parseSchemasOutput(output string) ([]string, error) {
-	log.Info("开始提取：", output)
-	reExp := "{*?hasData.*}"
-	regex := regexp.MustCompile(reExp)
+	var results []string
+	if !strings.Contains(output, `"hasData": true`) {
+		log.Error("查询结果集为空：", output)
+	}
 
-	matches := regex.FindStringSubmatch(output)
-	// 匹配正则
-	// if len(matches) < 1 {
-	// 	return nil, fmt.Errorf("提取结果集出错！")
-	// }
+	rows := strings.SplitSeq(output, "\n")
 
-	log.Info("提取到结果集：", matches)
+	for v := range rows {
+		if strings.Contains(v, `"Database"`) {
+			parts := strings.Split(v, `"`)
+			results = append(results, parts[3])
+		}
 
-	return []string{}, nil
+	}
+
+	return results, nil
 }
 
-// parseJSONOutput 解析 mysqlshell 的 JSON 输出
-func (m *MySQLShellTool) parseJSONOutput(output string) ([]string, error) {
-	// 忽略警告信息，只处理 JSON 部分
-	// 找到 JSON 开始的位置
-	jsonStart := strings.Index(output, "{")
-	if jsonStart == -1 {
-		// 没有找到 JSON，返回空列表
-		log.Info("No JSON found in output")
-		return []string{}, nil
+// 爬取数据库表
+func (m *MySQLShellTool) parseTablesOutput(output string) ([]string, error) {
+	var results []string
+	if !strings.Contains(output, `"hasData": true`) {
+		log.Error("查询结果集为空：", output)
 	}
 
-	// 提取 JSON 部分
-	jsonOutput := output[jsonStart:]
+	rows := strings.SplitSeq(output, "\n")
 
-	// 简化解析，实际项目中可能需要使用 JSON 库
-	// 这里假设输出格式为包含结果集的 JSON
-	// 实际实现可能需要根据 mysqlshell 的具体输出格式进行调整
+	for v := range rows {
+		fmt.Println(v)
+		if strings.Contains(v, `"Tables_in_`) {
+			parts := strings.Split(v, `"`)
+			results = append(results, parts[3])
+		}
 
-	// 这里只是一个简单的示例实现
-	// 实际项目中应该使用更健壮的解析方法
-	result := []string{}
-
-	// 查找结果集开始的位置
-	rowsStart := strings.Index(jsonOutput, "\"rows\":")
-	if rowsStart == -1 {
-		// 没有找到结果集，返回空列表
-		log.Info("No rows found in JSON output")
-		return []string{}, nil
 	}
 
-	// 查找结果集结束的位置
-	rowsEnd := strings.Index(jsonOutput[rowsStart:], "}")
-	if rowsEnd == -1 {
-		// 没有找到结果集结束，返回空列表
-		log.Info("No end of rows found in JSON output")
-		return []string{}, nil
+	return results, nil
+}
+
+func (m *MySQLShellTool) buildExportArgs(conn DatabaseConnection, config ExportConfig, exportType string) []string {
+	args := []string{
+		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--", "util", "export-instance",
 	}
 
-	// 提取结果集部分
-	rowsOutput := jsonOutput[rowsStart : rowsStart+rowsEnd+1]
+	if config.OutputDir != "" {
+		args = append(args, config.OutputDir)
+	}
 
-	// 简单处理：提取引号中的内容
-	parts := strings.Split(rowsOutput, "\"")
-	for i := 1; i < len(parts)-1; i += 2 {
-		value := parts[i]
-		// 过滤掉系统字段和空值
-		if value != "rows" && value != "Database" && value != "Tables_in_"+parts[0] && value != "" &&
-			value != "executionTime" && value != "affectedItemsCount" && value != "warningsCount" &&
-			value != "warnings" && value != "info" && value != "autoIncrementValue" {
-			// 过滤掉时间值（如 "0.0021 sec"）
-			if !strings.Contains(value, "sec") {
-				result = append(result, value)
+	optionArgs := []string{}
+
+	if config.Threads > 0 {
+		optionArgs = append(optionArgs, fmt.Sprintf("threads=%d", config.Threads))
+	}
+
+	if config.ChunkSize != "" {
+		optionArgs = append(optionArgs, fmt.Sprintf("chunkSize=%s", config.ChunkSize))
+	}
+
+	switch strings.ToLower(config.Compression) {
+	case "gzip", "gz":
+		optionArgs = append(optionArgs, "compression=gzip")
+	case "zstd":
+		optionArgs = append(optionArgs, "compression=zstd")
+	case "none":
+		optionArgs = append(optionArgs, "compression=none")
+	}
+
+	if len(config.IncludeSchemas) > 0 {
+		optionArgs = append(optionArgs, fmt.Sprintf("includeSchemas=[\"%s\"]", strings.Join(config.IncludeSchemas, "\",\"")))
+	}
+
+	if len(config.ExcludeSchemas) > 0 {
+		optionArgs = append(optionArgs, fmt.Sprintf("excludeSchemas=[\"%s\"]", strings.Join(config.ExcludeSchemas, "\",\"")))
+	}
+
+	if len(config.IncludeTables) > 0 {
+		optionArgs = append(optionArgs, fmt.Sprintf("includeTables=[\"%s\"]", strings.Join(config.IncludeTables, "\",\"")))
+	}
+
+	if len(config.ExcludeTables) > 0 {
+		optionArgs = append(optionArgs, fmt.Sprintf("excludeTables=[\"%s\"]", strings.Join(config.ExcludeTables, "\",\"")))
+	}
+
+	if len(optionArgs) > 0 {
+		args = append(args, "--outputUrl")
+		for _, opt := range optionArgs {
+			args = append(args, opt)
+		}
+	}
+
+	return args
+}
+
+func (m *MySQLShellTool) ExportDatabase(conn DatabaseConnection, database string, config ExportConfig) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
+
+	if config.OutputDir == "" {
+		config.OutputDir = "."
+	}
+
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
+		return fmt.Errorf("创建导出目录失败: %s", err.Error())
+	}
+
+	outputPath := filepath.Join(config.OutputDir, database)
+	normalizedPath := filepath.ToSlash(outputPath)
+
+	if config.Overwrite {
+		if _, err := os.Stat(outputPath); err == nil {
+			log.Info("Removing existing output directory for overwrite", "path", outputPath)
+			if err := os.RemoveAll(outputPath); err != nil {
+				log.Error("Failed to remove existing directory", "path", outputPath, "error", err)
+				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
 			}
 		}
 	}
 
-	log.Info("Parsed JSON output successfully", "count", len(result))
-	return result, nil
+	log.Info("Exporting database", "database", database, "output", outputPath, "threads", config.Threads)
+
+	options := map[string]any{}
+
+	if config.Threads > 0 {
+		options["threads"] = config.Threads
+	}
+
+	if config.ChunkSize != "" {
+		options["chunkSize"] = config.ChunkSize
+	}
+
+	switch strings.ToLower(config.Compression) {
+	case "gzip", "gz":
+		options["compression"] = "gzip"
+	case "zstd":
+		options["compression"] = "zstd"
+	case "none":
+		options["compression"] = "none"
+	}
+
+	optionsJSON, _ := json.Marshal(options)
+
+	args := []string{
+		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--js", "--execute", fmt.Sprintf(`util.dumpSchemas(['%s'], '%s', %s)`, database, normalizedPath, string(optionsJSON)),
+	}
+
+	cmd := exec.Command("mysqlsh", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Error("Error exporting database", "database", database, "error", err, "output", string(output))
+		return fmt.Errorf("导出数据库 %s 失败: %s, 错误信息: %s", database, err.Error(), string(output))
+	}
+
+	log.Info("Exported database successfully", "database", database, "output", outputPath)
+	return nil
+}
+
+func (m *MySQLShellTool) ExportDatabases(conn DatabaseConnection, databases []string, config ExportConfig) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
+
+	if config.OutputDir == "" {
+		config.OutputDir = "."
+	}
+
+	if config.Overwrite {
+		if _, err := os.Stat(config.OutputDir); err == nil {
+			log.Info("Removing existing output directory for overwrite", "path", config.OutputDir)
+			if err := os.RemoveAll(config.OutputDir); err != nil {
+				log.Error("Failed to remove existing directory", "path", config.OutputDir, "error", err)
+				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
+			}
+		}
+	}
+
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
+		return fmt.Errorf("创建导出目录失败: %s", err.Error())
+	}
+
+	normalizedOutputDir := filepath.ToSlash(config.OutputDir)
+
+	log.Info("Exporting multiple databases", "databases", databases, "output", config.OutputDir, "threads", config.Threads)
+
+	options := map[string]any{}
+
+	if config.Threads > 0 {
+		options["threads"] = config.Threads
+	}
+
+	if config.ChunkSize != "" {
+		options["chunkSize"] = config.ChunkSize
+	}
+
+	switch strings.ToLower(config.Compression) {
+	case "gzip", "gz":
+		options["compression"] = "gzip"
+	case "zstd":
+		options["compression"] = "zstd"
+	case "none":
+		options["compression"] = "none"
+	}
+
+	databasesJSON, _ := json.Marshal(databases)
+	optionsJSON, _ := json.Marshal(options)
+
+	args := []string{
+		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--js", "--execute", fmt.Sprintf("util.dumpSchemas(%s, '%s', %s)", string(databasesJSON), normalizedOutputDir, string(optionsJSON)),
+	}
+
+	cmd := exec.Command("mysqlsh", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Error("Error exporting databases", "databases", databases, "error", err, "output", string(output))
+		return fmt.Errorf("批量导出数据库失败: %s, 错误信息: %s", err.Error(), string(output))
+	}
+
+	log.Info("Exported databases successfully", "databases", databases, "output", config.OutputDir)
+	return nil
+}
+
+func (m *MySQLShellTool) ExportTables(conn DatabaseConnection, database string, tables []string, config ExportConfig) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
+
+	if config.OutputDir == "" {
+		config.OutputDir = "."
+	}
+
+	outputPath := filepath.Join(config.OutputDir, database)
+
+	if config.Overwrite {
+		if _, err := os.Stat(outputPath); err == nil {
+			log.Info("Removing existing output directory for overwrite", "path", outputPath)
+			if err := os.RemoveAll(outputPath); err != nil {
+				log.Error("Failed to remove existing directory", "path", outputPath, "error", err)
+				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
+			}
+		}
+	}
+
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
+		return fmt.Errorf("创建导出目录失败: %s", err.Error())
+	}
+
+	log.Info("Exporting tables", "database", database, "tables", tables, "output", outputPath, "threads", config.Threads)
+
+	options := map[string]any{}
+
+	if config.Threads > 0 {
+		options["threads"] = config.Threads
+	}
+
+	if config.ChunkSize != "" {
+		options["chunkSize"] = config.ChunkSize
+	}
+
+	switch strings.ToLower(config.Compression) {
+	case "gzip", "gz":
+		options["compression"] = "gzip"
+	case "zstd":
+		options["compression"] = "zstd"
+	case "none":
+		options["compression"] = "none"
+	}
+
+	tablesJSON, _ := json.Marshal(tables)
+	optionsJSON, _ := json.Marshal(options)
+
+	normalizedPath := filepath.ToSlash(outputPath)
+
+	args := []string{
+		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--js", "--execute", fmt.Sprintf("util.dumpTables('%s', %s, '%s', %s)", database, string(tablesJSON), normalizedPath, string(optionsJSON)),
+	}
+
+	cmd := exec.Command("mysqlsh", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Error("Error exporting tables", "database", database, "tables", tables, "error", err, "output", string(output))
+		return fmt.Errorf("导出表失败: %s, 错误信息: %s", err.Error(), string(output))
+	}
+
+	log.Info("Exported tables successfully", "database", database, "tables", tables, "output", outputPath)
+	return nil
+}
+
+func (m *MySQLShellTool) ExportInstance(conn DatabaseConnection, config ExportConfig) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
+
+	if config.OutputDir == "" {
+		config.OutputDir = "."
+	}
+
+	if config.Overwrite {
+		if _, err := os.Stat(config.OutputDir); err == nil {
+			log.Info("Removing existing output directory for overwrite", "path", config.OutputDir)
+			if err := os.RemoveAll(config.OutputDir); err != nil {
+				log.Error("Failed to remove existing directory", "path", config.OutputDir, "error", err)
+				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
+			}
+		}
+	}
+
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
+		return fmt.Errorf("创建导出目录失败: %s", err.Error())
+	}
+
+	log.Info("Exporting entire instance", "host", conn.Host, "port", conn.Port, "output", config.OutputDir, "threads", config.Threads)
+
+	options := map[string]any{}
+
+	if config.Threads > 0 {
+		options["threads"] = config.Threads
+	}
+
+	if config.ChunkSize != "" {
+		options["chunkSize"] = config.ChunkSize
+	}
+
+	switch strings.ToLower(config.Compression) {
+	case "gzip", "gz":
+		options["compression"] = "gzip"
+	case "zstd":
+		options["compression"] = "zstd"
+	case "none":
+		options["compression"] = "none"
+	}
+
+	if len(config.IncludeSchemas) > 0 {
+		options["includeSchemas"] = config.IncludeSchemas
+	}
+
+	if len(config.ExcludeSchemas) > 0 {
+		options["excludeSchemas"] = config.ExcludeSchemas
+	}
+
+	optionsJSON, _ := json.Marshal(options)
+
+	normalizedOutputDir := filepath.ToSlash(config.OutputDir)
+
+	args := []string{
+		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--js", "--execute", fmt.Sprintf("util.dumpInstance('%s', %s)", normalizedOutputDir, string(optionsJSON)),
+	}
+
+	cmd := exec.Command("mysqlsh", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Error("Error exporting instance", "host", conn.Host, "port", conn.Port, "error", err, "output", string(output))
+		return fmt.Errorf("导出实例失败: %s, 错误信息: %s", err.Error(), string(output))
+	}
+
+	log.Info("Exported instance successfully", "host", conn.Host, "port", conn.Port, "output", config.OutputDir)
+	return nil
 }

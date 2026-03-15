@@ -10,6 +10,8 @@ import (
 // DatabaseConnection 与 config 包中的结构保持一致
 type DatabaseConnection = config.DatabaseConnection
 
+type ExportSettings = config.ExportSettings
+
 // GetDatabaseConnections 获取所有数据库连接信息
 func GetDatabaseConnections() ([]DatabaseConnection, error) {
 	log.Info("Loading all database connections from config")
@@ -151,4 +153,34 @@ func DeleteDatabaseConnection(id string) error {
 // generateID 生成唯一 ID
 func generateID() string {
 	return time.Now().Format("20060102150405")
+}
+
+func GetExportSettings() (ExportSettings, error) {
+	log.Info("Loading export settings from config")
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Error("Error loading config", "error", err)
+		return ExportSettings{}, err
+	}
+	log.Info("Loaded export settings", "export_tool", cfg.ExportSettings.ExportTool, "export_path", cfg.ExportSettings.ExportPath)
+	return cfg.ExportSettings, nil
+}
+
+func SaveExportSettings(settings ExportSettings) error {
+	log.Info("Saving export settings", "export_tool", settings.ExportTool, "export_path", settings.ExportPath)
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Error("Error loading config", "error", err)
+		return err
+	}
+
+	cfg.ExportSettings = settings
+
+	err = config.SaveConfig(cfg)
+	if err != nil {
+		log.Error("Error saving config", "error", err)
+		return err
+	}
+	log.Info("Saved export settings successfully")
+	return nil
 }

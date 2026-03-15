@@ -163,3 +163,139 @@ func (a *App) ListTables(conn tools.DatabaseConnection) ([]string, error) {
 func (a *App) SelectFolder() (string, error) {
 	return tools.SelectFolder()
 }
+
+func (a *App) GetExportSettings() (tools.ExportSettings, error) {
+	log.Info("Getting export settings")
+	settings, err := tools.GetExportSettings()
+	if err != nil {
+		log.Error("Error getting export settings", "error", err)
+		return tools.ExportSettings{}, err
+	}
+	log.Info("Got export settings successfully")
+	return settings, nil
+}
+
+func (a *App) SaveExportSettings(settings tools.ExportSettings) error {
+	log.Info("Saving export settings")
+	err := tools.SaveExportSettings(settings)
+	if err != nil {
+		log.Error("Error saving export settings", "error", err)
+		return err
+	}
+	log.Info("Saved export settings successfully")
+	return nil
+}
+
+type ExportRequest struct {
+	ConnectionID   string   `json:"connection_id"`
+	Databases      []string `json:"databases"`
+	Database       string   `json:"database"`
+	Tables         []string `json:"tables"`
+	OutputDir      string   `json:"output_dir"`
+	Threads        int      `json:"threads"`
+	Compression    string   `json:"compression"`
+	ChunkSize      string   `json:"chunk_size"`
+	SkipDefiner    bool     `json:"skip_definer"`
+	SkipBinlog     bool     `json:"skip_binlog"`
+	IncludeSchemas []string `json:"include_schemas"`
+	ExcludeSchemas []string `json:"exclude_schemas"`
+	IncludeTables  []string `json:"include_tables"`
+	ExcludeTables  []string `json:"exclude_tables"`
+	Overwrite      bool     `json:"overwrite"`
+}
+
+type ExportResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Path    string `json:"path"`
+}
+
+func (a *App) ExportDatabases(req ExportRequest) (ExportResponse, error) {
+	log.Info("Exporting databases", "databases", req.Databases, "output", req.OutputDir)
+
+	if req.ConnectionID == "" {
+		return ExportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ExportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+	config := tools.ExportConfig{
+		OutputDir:      req.OutputDir,
+		Threads:        req.Threads,
+		Compression:    req.Compression,
+		ChunkSize:      req.ChunkSize,
+		IncludeSchemas: req.IncludeSchemas,
+		ExcludeSchemas: req.ExcludeSchemas,
+		IncludeTables:  req.IncludeTables,
+		ExcludeTables:  req.ExcludeTables,
+		Overwrite:      req.Overwrite,
+	}
+
+	err = mysqlShellTool.ExportDatabases(conn, req.Databases, config)
+	if err != nil {
+		log.Error("Error exporting databases", "databases", req.Databases, "error", err)
+		return ExportResponse{Success: false, Message: "导出失败: " + err.Error()}, nil
+	}
+
+	log.Info("Exported databases successfully", "databases", req.Databases, "output", req.OutputDir)
+	return ExportResponse{
+		Success: true,
+		Message: "导出成功",
+		Path:    req.OutputDir,
+	}, nil
+}
+
+func (a *App) ExportTables(req ExportRequest) (ExportResponse, error) {
+	log.Info("Exporting tables", "database", req.Database, "tables", req.Tables, "output", req.OutputDir)
+
+	if req.ConnectionID == "" {
+		return ExportResponse{Success: false, Message: "连接ID不能为空"}, nil
+	}
+
+	if req.Database == "" {
+		return ExportResponse{Success: false, Message: "数据库名不能为空"}, nil
+	}
+
+	if len(req.Tables) == 0 {
+		return ExportResponse{Success: false, Message: "请选择要导出的表"}, nil
+	}
+
+	conn, err := tools.GetDatabaseConnection(req.ConnectionID)
+	if err != nil {
+		log.Error("Error getting database connection", "id", req.ConnectionID, "error", err)
+		return ExportResponse{Success: false, Message: "获取连接信息失败: " + err.Error()}, nil
+	}
+
+	conn.Database = req.Database
+
+	mysqlShellTool := tools.NewMySQLShellTool()
+	config := tools.ExportConfig{
+		OutputDir:      req.OutputDir,
+		Threads:        req.Threads,
+		Compression:    req.Compression,
+		ChunkSize:      req.ChunkSize,
+		IncludeSchemas: req.IncludeSchemas,
+		ExcludeSchemas: req.ExcludeSchemas,
+		IncludeTables:  req.IncludeTables,
+		ExcludeTables:  req.ExcludeTables,
+		Overwrite:      req.Overwrite,
+	}
+
+	err = mysqlShellTool.ExportTables(conn, req.Database, req.Tables, config)
+	if err != nil {
+		log.Error("Error exporting tables", "database", req.Database, "tables", req.Tables, "error", err)
+		return ExportResponse{Success: false, Message: "导出失败: " + err.Error()}, nil
+	}
+
+	log.Info("Exported tables successfully", "database", req.Database, "tables", req.Tables, "output", req.OutputDir)
+	return ExportResponse{
+		Success: true,
+		Message: "导出成功",
+		Path:    req.OutputDir,
+	}, nil
+}

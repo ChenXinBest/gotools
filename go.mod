@@ -1,6 +1,6 @@
 module gotools
 
-go 1.25.0
+go 1.26.1
 
 require (
 	github.com/shirou/gopsutil/v3 v3.24.5

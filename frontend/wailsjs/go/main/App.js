@@ -14,12 +14,24 @@ export function DeleteDatabaseConnection(arg1) {
   return window['go']['main']['App']['DeleteDatabaseConnection'](arg1);
 }
 
+export function ExportDatabases(arg1) {
+  return window['go']['main']['App']['ExportDatabases'](arg1);
+}
+
+export function ExportTables(arg1) {
+  return window['go']['main']['App']['ExportTables'](arg1);
+}
+
 export function GetDatabaseConnection(arg1) {
   return window['go']['main']['App']['GetDatabaseConnection'](arg1);
 }
 
 export function GetDatabaseConnections() {
   return window['go']['main']['App']['GetDatabaseConnections']();
+}
+
+export function GetExportSettings() {
+  return window['go']['main']['App']['GetExportSettings']();
 }
 
 export function GetSystemProcessInfos() {
@@ -40,6 +52,10 @@ export function ListDatabases(arg1) {
 
 export function ListTables(arg1) {
   return window['go']['main']['App']['ListTables'](arg1);
+}
+
+export function SaveExportSettings(arg1) {
+  return window['go']['main']['App']['SaveExportSettings'](arg1);
 }
 
 export function SearchPidByKeyWord(arg1) {

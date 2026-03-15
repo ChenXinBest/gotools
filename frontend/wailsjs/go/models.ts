@@ -24,6 +24,111 @@ export namespace config {
 	        this.database = source["database"];
 	    }
 	}
+	export class ExportSettings {
+	    export_tool: string;
+	    export_path: string;
+	    last_connection_id: string;
+	    last_databases: string[];
+	    last_database: string;
+	    last_tables: string[];
+	    threads: number;
+	    skip_definer: boolean;
+	    skip_binlog: boolean;
+	    compression: string;
+	    chunk_size: string;
+	    export_scope: string;
+	    include_schemas: string;
+	    exclude_schemas: string;
+	    include_tables: string;
+	    exclude_tables: string;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.export_tool = source["export_tool"];
+	        this.export_path = source["export_path"];
+	        this.last_connection_id = source["last_connection_id"];
+	        this.last_databases = source["last_databases"];
+	        this.last_database = source["last_database"];
+	        this.last_tables = source["last_tables"];
+	        this.threads = source["threads"];
+	        this.skip_definer = source["skip_definer"];
+	        this.skip_binlog = source["skip_binlog"];
+	        this.compression = source["compression"];
+	        this.chunk_size = source["chunk_size"];
+	        this.export_scope = source["export_scope"];
+	        this.include_schemas = source["include_schemas"];
+	        this.exclude_schemas = source["exclude_schemas"];
+	        this.include_tables = source["include_tables"];
+	        this.exclude_tables = source["exclude_tables"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
+
+}
+
+export namespace main {
+	
+	export class ExportRequest {
+	    connection_id: string;
+	    databases: string[];
+	    database: string;
+	    tables: string[];
+	    output_dir: string;
+	    threads: number;
+	    compression: string;
+	    chunk_size: string;
+	    skip_definer: boolean;
+	    skip_binlog: boolean;
+	    include_schemas: string[];
+	    exclude_schemas: string[];
+	    include_tables: string[];
+	    exclude_tables: string[];
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connection_id = source["connection_id"];
+	        this.databases = source["databases"];
+	        this.database = source["database"];
+	        this.tables = source["tables"];
+	        this.output_dir = source["output_dir"];
+	        this.threads = source["threads"];
+	        this.compression = source["compression"];
+	        this.chunk_size = source["chunk_size"];
+	        this.skip_definer = source["skip_definer"];
+	        this.skip_binlog = source["skip_binlog"];
+	        this.include_schemas = source["include_schemas"];
+	        this.exclude_schemas = source["exclude_schemas"];
+	        this.include_tables = source["include_tables"];
+	        this.exclude_tables = source["exclude_tables"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
+	export class ExportResponse {
+	    success: boolean;
+	    message: string;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.path = source["path"];
+	    }
+	}
 
 }
 
