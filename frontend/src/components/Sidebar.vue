@@ -1,33 +1,38 @@
 <script setup>
-import { ref } from "vue";
-import { FaCog, FaDatabase, FaMicrochip, FaSave } from "vue-icons-plus/fa";
+import { ref, computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { FaCog, FaDatabase, FaMicrochip, FaSave, FaHome, FaCogs } from "vue-icons-plus/fa";
+import { useAppStore } from "../stores/app";
 
-const props = defineProps({
-    currentTool: {
-        type: String,
-        default: "process-manager",
-    },
-});
-
-const emit = defineEmits(["navigate"]);
+const router = useRouter();
+const route = useRoute();
+const appStore = useAppStore();
 
 const menuItems = [
     {
-        category: "系统工具",
+        category: "工具",
         icon: FaCog,
         items: [
-            { id: "process-manager", name: "进程管理器", icon: FaMicrochip },
+            { id: "home", name: "首页", icon: FaHome, route: "/" },
+            { id: "process-manager", name: "进程管理器", icon: FaMicrochip, route: "/process-manager" },
         ],
     },
     {
         category: "数据库",
         icon: FaDatabase,
-        items: [{ id: "database-backup", name: "导入/导出", icon: FaSave }],
+        items: [{ id: "database-backup", name: "导入/导出", icon: FaSave, route: "/database-backup" }],
+    },
+    {
+        category: "设置",
+        icon: FaCogs,
+        items: [{ id: "settings", name: "应用设置", icon: FaCog, route: "/settings" }],
     },
 ];
 
-const expandedCategories = ref(["系统工具"]);
-const isCollapsed = ref(false);
+const expandedCategories = ref(["工具", "数据库", "设置"]);
+const isCollapsed = ref(appStore.sidebarCollapsed);
+
+const currentRoute = computed(() => route.path);
 
 function toggleCategory(category) {
     const index = expandedCategories.value.indexOf(category);
@@ -42,12 +47,17 @@ function isExpanded(category) {
     return expandedCategories.value.includes(category);
 }
 
-function navigateTo(toolId) {
-    emit("navigate", toolId);
+function navigateTo(item) {
+    router.push(item.route);
 }
 
 function toggleSidebar() {
     isCollapsed.value = !isCollapsed.value;
+    appStore.toggleSidebar();
+}
+
+function isActive(item) {
+    return currentRoute.value === item.route;
 }
 </script>
 
@@ -93,8 +103,8 @@ function toggleSidebar() {
                         v-for="item in group.items"
                         :key="item.id"
                         class="menu-item"
-                        :class="{ active: currentTool === item.id }"
-                        @click="navigateTo(item.id)"
+                        :class="{ active: isActive(item) }"
+                        @click="navigateTo(item)"
                     >
                         <span class="item-icon">
                             <component :is="item.icon" />

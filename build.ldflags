@@ -1,0 +1,11 @@
+# GoTools 构建标志配置
+# 在构建时通过 -ldflags 注入版本信息
+
+# 使用方法:
+# go build -ldflags "$(cat build.ldflags)"
+
+# 变量定义（在 internal/version 包中）
+-X gotools/internal/version.Version=
+-X gotools/internal/version.BuildTime=
+-X gotools/internal/version.GitCommit=
+-X gotools/internal/version.GitBranch=

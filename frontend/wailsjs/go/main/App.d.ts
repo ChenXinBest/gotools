@@ -3,6 +3,7 @@
 import {config} from '../models';
 import {main} from '../models';
 import {tools} from '../models';
+import {version} from '../models';
 
 export function AddDatabaseConnection(arg1:config.DatabaseConnection):Promise<void>;
 
@@ -29,6 +30,10 @@ export function GetDatabaseConnections():Promise<Array<config.DatabaseConnection
 export function GetExportSettings():Promise<config.ExportSettings>;
 
 export function GetSystemProcessInfos():Promise<Array<tools.ProcessInfo>>;
+
+export function GetVersion():Promise<version.Info>;
+
+export function GetVersionString():Promise<string>;
 
 export function Greet(arg1:string):Promise<string>;
 

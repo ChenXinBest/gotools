@@ -357,3 +357,30 @@ export namespace tools {
 
 }
 
+export namespace version {
+	
+	export class Info {
+	    version: string;
+	    build_time: string;
+	    git_commit: string;
+	    git_branch: string;
+	    go_version: string;
+	    platform: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.build_time = source["build_time"];
+	        this.git_commit = source["git_commit"];
+	        this.git_branch = source["git_branch"];
+	        this.go_version = source["go_version"];
+	        this.platform = source["platform"];
+	    }
+	}
+
+}
+

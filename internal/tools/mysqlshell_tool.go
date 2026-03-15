@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gotools/internal/log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -49,7 +48,9 @@ const (
 	MySQLShellDownloadURL = "https://dev.mysql.com/downloads/shell/"
 )
 
-type MySQLShellTool struct{}
+type MySQLShellTool struct {
+	common *CommonTool
+}
 
 type ExportConfig struct {
 	OutputDir      string
@@ -77,13 +78,14 @@ type ImportConfig struct {
 
 func NewMySQLShellTool() *MySQLShellTool {
 	log.Info("Creating new MySQLShellTool instance")
-	return &MySQLShellTool{}
+	return &MySQLShellTool{
+		common: NewCommonTool(),
+	}
 }
 
 func (m *MySQLShellTool) checkMySQLShellExists() error {
-	_, err := exec.LookPath("mysqlsh")
+	err := m.common.CheckCommandExists("mysqlsh")
 	if err != nil {
-		log.Error("mysqlsh command not found", "error", err)
 		return fmt.Errorf("%s: 未找到 mysqlsh 命令，请先安装 MySQL Shell", ErrMySQLShellNotFound)
 	}
 	return nil
@@ -93,16 +95,21 @@ func (m *MySQLShellTool) ConnectDatabase(conn DatabaseConnection) error {
 	if err := m.checkMySQLShellExists(); err != nil {
 		return err
 	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
 	log.Info("Connecting to database using mysqlshell", "host", conn.Host, "port", conn.Port, "database", conn.Database)
-	cmd := exec.Command("mysqlsh",
-		"--uri", fmt.Sprintf("%s:%s@%s:%d/%s", conn.User, conn.Password, conn.Host, conn.Port, conn.Database),
+
+	uri := m.common.BuildDatabaseURI(conn, true)
+	output, err := m.common.ExecuteCommand("mysqlsh",
+		"--uri", uri,
 		"--execute", "SELECT 1;")
 
-	output, err := cmd.CombinedOutput()
-
 	if err != nil {
-		log.Error("Error connecting to database", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", string(output))
-		return fmt.Errorf("连接失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error connecting to database", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", output)
+		return fmt.Errorf("连接失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Connected to database successfully", "host", conn.Host, "port", conn.Port, "database", conn.Database)
@@ -113,20 +120,25 @@ func (m *MySQLShellTool) ListDatabases(conn DatabaseConnection) ([]string, error
 	if err := m.checkMySQLShellExists(); err != nil {
 		return nil, err
 	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return nil, err
+	}
+
 	log.Info("Listing databases using mysqlshell", "host", conn.Host, "port", conn.Port)
-	cmd := exec.Command("mysqlsh",
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+
+	uri := m.common.BuildDatabaseURI(conn, false)
+	output, err := m.common.ExecuteCommand("mysqlsh",
+		"--uri", uri,
 		"--execute", "SHOW DATABASES;",
 		"--json")
 
-	output, err := cmd.CombinedOutput()
-
 	if err != nil {
-		log.Error("Error listing databases", "host", conn.Host, "port", conn.Port, "error", err, "output", string(output))
-		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error listing databases", "host", conn.Host, "port", conn.Port, "error", err, "output", output)
+		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
-	databases, err := m.parseSchemasOutput(string(output))
+	databases, err := m.parseSchemasOutput(output)
 	if err != nil {
 		log.Error("Error parsing database list output", "error", err)
 		return nil, err
@@ -140,20 +152,29 @@ func (m *MySQLShellTool) ListTables(conn DatabaseConnection) ([]string, error) {
 	if err := m.checkMySQLShellExists(); err != nil {
 		return nil, err
 	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return nil, err
+	}
+
+	if conn.Database == "" {
+		return nil, fmt.Errorf("数据库名称不能为空")
+	}
+
 	log.Info("Listing tables using mysqlshell", "host", conn.Host, "port", conn.Port, "database", conn.Database)
-	cmd := exec.Command("mysqlsh",
-		"--uri", fmt.Sprintf("%s:%s@%s:%d/%s", conn.User, conn.Password, conn.Host, conn.Port, conn.Database),
+
+	uri := m.common.BuildDatabaseURI(conn, true)
+	output, err := m.common.ExecuteCommand("mysqlsh",
+		"--uri", uri,
 		"--execute", "SHOW TABLES;",
 		"--json")
 
-	output, err := cmd.CombinedOutput()
-
 	if err != nil {
-		log.Error("Error listing tables", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", string(output))
-		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error listing tables", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", output)
+		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
-	tables, err := m.parseTablesOutput(string(output))
+	tables, err := m.parseTablesOutput(output)
 	if err != nil {
 		log.Error("Error parsing table list output", "error", err)
 		return nil, err
@@ -193,7 +214,6 @@ func (m *MySQLShellTool) parseTablesOutput(output string) ([]string, error) {
 	rows := strings.SplitSeq(output, "\n")
 
 	for v := range rows {
-		fmt.Println(v)
 		if strings.Contains(v, `"Tables_in_`) {
 			parts := strings.Split(v, `"`)
 			results = append(results, parts[3])
@@ -259,35 +279,8 @@ func (m *MySQLShellTool) buildExportArgs(conn DatabaseConnection, config ExportC
 	return args
 }
 
-func (m *MySQLShellTool) ExportDatabase(conn DatabaseConnection, database string, config ExportConfig) error {
-	if err := m.checkMySQLShellExists(); err != nil {
-		return err
-	}
-
-	if config.OutputDir == "" {
-		config.OutputDir = "."
-	}
-
-	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
-		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
-		return fmt.Errorf("创建导出目录失败: %s", err.Error())
-	}
-
-	outputPath := filepath.Join(config.OutputDir, database)
-	normalizedPath := filepath.ToSlash(outputPath)
-
-	if config.Overwrite {
-		if _, err := os.Stat(outputPath); err == nil {
-			log.Info("Removing existing output directory for overwrite", "path", outputPath)
-			if err := os.RemoveAll(outputPath); err != nil {
-				log.Error("Failed to remove existing directory", "path", outputPath, "error", err)
-				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
-			}
-		}
-	}
-
-	log.Info("Exporting database", "database", database, "output", outputPath, "threads", config.Threads)
-
+// buildExportOptions 构建导出选项
+func (m *MySQLShellTool) buildExportOptions(config ExportConfig) map[string]any {
 	options := map[string]any{}
 
 	if config.Threads > 0 {
@@ -307,19 +300,70 @@ func (m *MySQLShellTool) ExportDatabase(conn DatabaseConnection, database string
 		options["compression"] = "none"
 	}
 
-	optionsJSON, _ := json.Marshal(options)
-
-	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
-		"--js", "--execute", fmt.Sprintf(`util.dumpSchemas(['%s'], '%s', %s)`, database, normalizedPath, string(optionsJSON)),
+	if len(config.IncludeSchemas) > 0 {
+		options["includeSchemas"] = config.IncludeSchemas
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
+	if len(config.ExcludeSchemas) > 0 {
+		options["excludeSchemas"] = config.ExcludeSchemas
+	}
 
+	if len(config.IncludeTables) > 0 {
+		options["includeTables"] = config.IncludeTables
+	}
+
+	if len(config.ExcludeTables) > 0 {
+		options["excludeTables"] = config.ExcludeTables
+	}
+
+	return options
+}
+
+func (m *MySQLShellTool) ExportDatabase(conn DatabaseConnection, database string, config ExportConfig) error {
+	if err := m.checkMySQLShellExists(); err != nil {
+		return err
+	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
+	if err := m.common.ValidateExportConfig(config.OutputDir); err != nil {
+		return err
+	}
+
+	if database == "" {
+		return fmt.Errorf("数据库名称不能为空")
+	}
+
+	if err := m.common.EnsureDirExists(config.OutputDir); err != nil {
+		return err
+	}
+
+	outputPath := filepath.Join(config.OutputDir, database)
+	normalizedPath := m.common.NormalizePath(outputPath)
+
+	if config.Overwrite {
+		if err := m.common.RemoveIfExists(outputPath); err != nil {
+			return err
+		}
+	}
+
+	log.Info("Exporting database", "database", database, "output", outputPath, "threads", config.Threads)
+
+	options := m.buildExportOptions(config)
+	optionsJSON, _ := json.Marshal(options)
+
+	uri := m.common.BuildDatabaseURI(conn, false)
+	args := []string{
+		"--uri", uri,
+		"--js", "--execute", fmt.Sprintf("util.dumpSchemas(['%s'], '%s', %s)", database, normalizedPath, string(optionsJSON)),
+	}
+
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Error exporting database", "database", database, "error", err, "output", string(output))
-		return fmt.Errorf("导出数据库 %s 失败: %s, 错误信息: %s", database, err.Error(), string(output))
+		log.Error("Error exporting database", "database", database, "error", err, "output", output)
+		return fmt.Errorf("导出数据库 %s 失败: %s, 错误信息: %s", database, err.Error(), output)
 	}
 
 	log.Info("Exported database successfully", "database", database, "output", outputPath)
@@ -331,62 +375,50 @@ func (m *MySQLShellTool) ExportDatabases(conn DatabaseConnection, databases []st
 		return err
 	}
 
-	if config.OutputDir == "" {
-		config.OutputDir = "."
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
+	if err := m.common.ValidateExportConfig(config.OutputDir); err != nil {
+		return err
+	}
+
+	if len(databases) == 0 {
+		return fmt.Errorf("数据库列表不能为空")
+	}
+
+	if err := m.common.EnsureDirExists(config.OutputDir); err != nil {
+		return err
 	}
 
 	if config.Overwrite {
-		if _, err := os.Stat(config.OutputDir); err == nil {
-			log.Info("Removing existing output directory for overwrite", "path", config.OutputDir)
-			if err := os.RemoveAll(config.OutputDir); err != nil {
-				log.Error("Failed to remove existing directory", "path", config.OutputDir, "error", err)
-				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
-			}
+		if err := m.common.RemoveIfExists(config.OutputDir); err != nil {
+			return err
+		}
+		// 重新创建目录
+		if err := m.common.EnsureDirExists(config.OutputDir); err != nil {
+			return err
 		}
 	}
 
-	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
-		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
-		return fmt.Errorf("创建导出目录失败: %s", err.Error())
-	}
-
-	normalizedOutputDir := filepath.ToSlash(config.OutputDir)
+	normalizedOutputDir := m.common.NormalizePath(config.OutputDir)
 
 	log.Info("Exporting multiple databases", "databases", databases, "output", config.OutputDir, "threads", config.Threads)
 
-	options := map[string]any{}
-
-	if config.Threads > 0 {
-		options["threads"] = config.Threads
-	}
-
-	if config.ChunkSize != "" {
-		options["chunkSize"] = config.ChunkSize
-	}
-
-	switch strings.ToLower(config.Compression) {
-	case "gzip", "gz":
-		options["compression"] = "gzip"
-	case "zstd":
-		options["compression"] = "zstd"
-	case "none":
-		options["compression"] = "none"
-	}
-
+	options := m.buildExportOptions(config)
 	databasesJSON, _ := json.Marshal(databases)
 	optionsJSON, _ := json.Marshal(options)
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--js", "--execute", fmt.Sprintf("util.dumpSchemas(%s, '%s', %s)", string(databasesJSON), normalizedOutputDir, string(optionsJSON)),
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Error exporting databases", "databases", databases, "error", err, "output", string(output))
-		return fmt.Errorf("批量导出数据库失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error exporting databases", "databases", databases, "error", err, "output", output)
+		return fmt.Errorf("批量导出数据库失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Exported databases successfully", "databases", databases, "output", config.OutputDir)
@@ -398,64 +430,52 @@ func (m *MySQLShellTool) ExportTables(conn DatabaseConnection, database string, 
 		return err
 	}
 
-	if config.OutputDir == "" {
-		config.OutputDir = "."
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
+	if err := m.common.ValidateExportConfig(config.OutputDir); err != nil {
+		return err
+	}
+
+	if database == "" {
+		return fmt.Errorf("数据库名称不能为空")
+	}
+
+	if len(tables) == 0 {
+		return fmt.Errorf("表列表不能为空")
+	}
+
+	if err := m.common.EnsureDirExists(config.OutputDir); err != nil {
+		return err
 	}
 
 	outputPath := filepath.Join(config.OutputDir, database)
 
 	if config.Overwrite {
-		if _, err := os.Stat(outputPath); err == nil {
-			log.Info("Removing existing output directory for overwrite", "path", outputPath)
-			if err := os.RemoveAll(outputPath); err != nil {
-				log.Error("Failed to remove existing directory", "path", outputPath, "error", err)
-				return fmt.Errorf("删除已存在目录失败: %s", err.Error())
-			}
+		if err := m.common.RemoveIfExists(outputPath); err != nil {
+			return err
 		}
-	}
-
-	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
-		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
-		return fmt.Errorf("创建导出目录失败: %s", err.Error())
 	}
 
 	log.Info("Exporting tables", "database", database, "tables", tables, "output", outputPath, "threads", config.Threads)
 
-	options := map[string]any{}
-
-	if config.Threads > 0 {
-		options["threads"] = config.Threads
-	}
-
-	if config.ChunkSize != "" {
-		options["chunkSize"] = config.ChunkSize
-	}
-
-	switch strings.ToLower(config.Compression) {
-	case "gzip", "gz":
-		options["compression"] = "gzip"
-	case "zstd":
-		options["compression"] = "zstd"
-	case "none":
-		options["compression"] = "none"
-	}
-
+	options := m.buildExportOptions(config)
 	tablesJSON, _ := json.Marshal(tables)
 	optionsJSON, _ := json.Marshal(options)
 
-	normalizedPath := filepath.ToSlash(outputPath)
+	normalizedPath := m.common.NormalizePath(outputPath)
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--js", "--execute", fmt.Sprintf("util.dumpTables('%s', %s, '%s', %s)", database, string(tablesJSON), normalizedPath, string(optionsJSON)),
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Error exporting tables", "database", database, "tables", tables, "error", err, "output", string(output))
-		return fmt.Errorf("导出表失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error exporting tables", "database", database, "tables", tables, "error", err, "output", output)
+		return fmt.Errorf("导出表失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Exported tables successfully", "database", database, "tables", tables, "output", outputPath)
@@ -517,19 +537,18 @@ func (m *MySQLShellTool) ExportInstance(conn DatabaseConnection, config ExportCo
 
 	optionsJSON, _ := json.Marshal(options)
 
-	normalizedOutputDir := filepath.ToSlash(config.OutputDir)
+	normalizedOutputDir := m.common.NormalizePath(config.OutputDir)
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--js", "--execute", fmt.Sprintf("util.dumpInstance('%s', %s)", normalizedOutputDir, string(optionsJSON)),
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Error exporting instance", "host", conn.Host, "port", conn.Port, "error", err, "output", string(output))
-		return fmt.Errorf("导出实例失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error exporting instance", "host", conn.Host, "port", conn.Port, "error", err, "output", output)
+		return fmt.Errorf("导出实例失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Exported instance successfully", "host", conn.Host, "port", conn.Port, "output", config.OutputDir)
@@ -539,17 +558,16 @@ func (m *MySQLShellTool) ExportInstance(conn DatabaseConnection, config ExportCo
 func (m *MySQLShellTool) enableLocalInfile(conn DatabaseConnection) error {
 	log.Info("Enabling local_infile on server", "host", conn.Host, "port", conn.Port)
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--sql", "--execute", "SET GLOBAL local_infile = ON;",
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Error enabling local_infile", "error", err, "output", string(output))
-		return fmt.Errorf("启用 local_infile 失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error enabling local_infile", "error", err, "output", output)
+		return fmt.Errorf("启用 local_infile 失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Enabled local_infile successfully", "host", conn.Host, "port", conn.Port)
@@ -561,18 +579,57 @@ func (m *MySQLShellTool) ImportDatabases(conn DatabaseConnection, config ImportC
 		return err
 	}
 
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
 	if config.InputDir == "" {
 		return fmt.Errorf("导入目录不能为空")
 	}
 
-	if _, err := os.Stat(config.InputDir); os.IsNotExist(err) {
+	if !m.common.FileExists(config.InputDir) {
 		return fmt.Errorf("导入目录不存在: %s", config.InputDir)
 	}
 
-	normalizedInputDir := filepath.ToSlash(config.InputDir)
+	normalizedInputDir := m.common.NormalizePath(config.InputDir)
 
 	log.Info("Importing databases", "input", config.InputDir, "threads", config.Threads)
 
+	options := m.buildImportOptions(config)
+	optionsJSON, _ := json.Marshal(options)
+
+	uri := m.common.BuildDatabaseURI(conn, false)
+	args := []string{
+		"--uri", uri,
+		"--js", "--execute", fmt.Sprintf("util.loadDump('%s', %s)", normalizedInputDir, string(optionsJSON)),
+	}
+
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
+	if err != nil {
+		if strings.Contains(output, "local_infile disabled in server") || strings.Contains(output, "local_infile' global system variable must be set to ON") {
+			log.Info("Detected local_infile disabled, attempting to enable it", "host", conn.Host, "port", conn.Port)
+			if enableErr := m.enableLocalInfile(conn); enableErr != nil {
+				log.Error("Failed to enable local_infile", "error", enableErr)
+				return fmt.Errorf("导入数据库失败: 服务器 local_infile 已禁用，尝试启用失败: %s", enableErr.Error())
+			}
+			log.Info("Retrying import after enabling local_infile", "input", config.InputDir)
+			output, err = m.common.ExecuteCommand("mysqlsh", args...)
+			if err != nil {
+				log.Error("Error importing databases after enabling local_infile", "input", config.InputDir, "error", err, "output", output)
+				return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), output)
+			}
+		} else {
+			log.Error("Error importing databases", "input", config.InputDir, "error", err, "output", output)
+			return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), output)
+		}
+	}
+
+	log.Info("Imported databases successfully", "input", config.InputDir)
+	return nil
+}
+
+// buildImportOptions 构建导入选项
+func (m *MySQLShellTool) buildImportOptions(config ImportConfig) map[string]any {
 	options := map[string]any{}
 
 	if config.Threads > 0 {
@@ -607,39 +664,7 @@ func (m *MySQLShellTool) ImportDatabases(conn DatabaseConnection, config ImportC
 		options["waitTimeout"] = config.WaitTimeout
 	}
 
-	optionsJSON, _ := json.Marshal(options)
-
-	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
-		"--js", "--execute", fmt.Sprintf("util.loadDump('%s', %s)", normalizedInputDir, string(optionsJSON)),
-	}
-
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		outputStr := string(output)
-		if strings.Contains(outputStr, "local_infile disabled in server") || strings.Contains(outputStr, "local_infile' global system variable must be set to ON") {
-			log.Info("Detected local_infile disabled, attempting to enable it", "host", conn.Host, "port", conn.Port)
-			if enableErr := m.enableLocalInfile(conn); enableErr != nil {
-				log.Error("Failed to enable local_infile", "error", enableErr)
-				return fmt.Errorf("导入数据库失败: 服务器 local_infile 已禁用，尝试启用失败: %s", enableErr.Error())
-			}
-			log.Info("Retrying import after enabling local_infile", "input", config.InputDir)
-			cmd = exec.Command("mysqlsh", args...)
-			output, err = cmd.CombinedOutput()
-			if err != nil {
-				log.Error("Error importing databases after enabling local_infile", "input", config.InputDir, "error", err, "output", string(output))
-				return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), string(output))
-			}
-		} else {
-			log.Error("Error importing databases", "input", config.InputDir, "error", err, "output", outputStr)
-			return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), outputStr)
-		}
-	}
-
-	log.Info("Imported databases successfully", "input", config.InputDir)
-	return nil
+	return options
 }
 
 func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, config ImportConfig) error {
@@ -647,11 +672,15 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 		return err
 	}
 
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
 	if config.InputDir == "" {
 		return fmt.Errorf("导入目录不能为空")
 	}
 
-	if _, err := os.Stat(config.InputDir); os.IsNotExist(err) {
+	if !m.common.FileExists(config.InputDir) {
 		return fmt.Errorf("导入目录不存在: %s", config.InputDir)
 	}
 
@@ -659,7 +688,7 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 		return fmt.Errorf("目标数据库不能为空")
 	}
 
-	normalizedInputDir := filepath.ToSlash(config.InputDir)
+	normalizedInputDir := m.common.NormalizePath(config.InputDir)
 
 	log.Info("Importing tables", "database", database, "input", config.InputDir, "threads", config.Threads)
 
@@ -689,32 +718,29 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 
 	optionsJSON, _ := json.Marshal(options)
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--js", "--execute", fmt.Sprintf("util.loadDump('%s', %s)", normalizedInputDir, string(optionsJSON)),
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		outputStr := string(output)
-		if strings.Contains(outputStr, "local_infile disabled in server") || strings.Contains(outputStr, "local_infile' global system variable must be set to ON") {
+		if strings.Contains(output, "local_infile disabled in server") || strings.Contains(output, "local_infile' global system variable must be set to ON") {
 			log.Info("Detected local_infile disabled, attempting to enable it", "host", conn.Host, "port", conn.Port)
 			if enableErr := m.enableLocalInfile(conn); enableErr != nil {
 				log.Error("Failed to enable local_infile", "error", enableErr)
 				return fmt.Errorf("导入表失败: 服务器 local_infile 已禁用，尝试启用失败: %s", enableErr.Error())
 			}
 			log.Info("Retrying import after enabling local_infile", "database", database, "input", config.InputDir)
-			cmd = exec.Command("mysqlsh", args...)
-			output, err = cmd.CombinedOutput()
+			output, err = m.common.ExecuteCommand("mysqlsh", args...)
 			if err != nil {
-				log.Error("Error importing tables after enabling local_infile", "database", database, "input", config.InputDir, "error", err, "output", string(output))
-				return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), string(output))
+				log.Error("Error importing tables after enabling local_infile", "database", database, "input", config.InputDir, "error", err, "output", output)
+				return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), output)
 			}
 		} else {
-			log.Error("Error importing tables", "database", database, "input", config.InputDir, "error", err, "output", outputStr)
-			return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), outputStr)
+			log.Error("Error importing tables", "database", database, "input", config.InputDir, "error", err, "output", output)
+			return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), output)
 		}
 	}
 
@@ -820,20 +846,20 @@ func (m *MySQLShellTool) getExistingTables(conn DatabaseConnection, schema strin
 
 	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN (%s) AND TABLE_TYPE = 'BASE TABLE'", schema, strings.Join(tableList, ","))
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--sql", "--execute", query,
 		"--json",
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Failed to query existing tables", "schema", schema, "error", err, "output", string(output))
+		log.Error("Failed to query existing tables", "schema", schema, "error", err, "output", output)
 		return nil, fmt.Errorf("查询已存在表失败: %s", err.Error())
 	}
 
-	return m.parseExistingObjectsOutput(string(output), "TABLE_NAME"), nil
+	return m.parseExistingObjectsOutput(output, "TABLE_NAME"), nil
 }
 
 func (m *MySQLShellTool) getExistingViews(conn DatabaseConnection, schema string, views []string) ([]string, error) {
@@ -848,20 +874,20 @@ func (m *MySQLShellTool) getExistingViews(conn DatabaseConnection, schema string
 
 	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.VIEWS WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN (%s)", schema, strings.Join(viewList, ","))
 
+	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
-		"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+		"--uri", uri,
 		"--sql", "--execute", query,
 		"--json",
 	}
 
-	cmd := exec.Command("mysqlsh", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		log.Error("Failed to query existing views", "schema", schema, "error", err, "output", string(output))
+		log.Error("Failed to query existing views", "schema", schema, "error", err, "output", output)
 		return nil, fmt.Errorf("查询已存在视图失败: %s", err.Error())
 	}
 
-	return m.parseExistingObjectsOutput(string(output), "TABLE_NAME"), nil
+	return m.parseExistingObjectsOutput(output, "TABLE_NAME"), nil
 }
 
 func (m *MySQLShellTool) parseExistingObjectsOutput(output, fieldName string) []string {
@@ -916,16 +942,16 @@ func (m *MySQLShellTool) DropObjects(conn DatabaseConnection, conflicts []Import
 
 		log.Info("Dropping conflicting objects", "schema", conflict.Schema, "tables", len(conflict.Tables), "views", len(conflict.Views))
 
+		uri := m.common.BuildDatabaseURI(conn, false)
 		args := []string{
-			"--uri", fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port),
+			"--uri", uri,
 			"--sql", "--execute", dropSQL,
 		}
 
-		cmd := exec.Command("mysqlsh", args...)
-		output, err := cmd.CombinedOutput()
+		output, err := m.common.ExecuteCommand("mysqlsh", args...)
 		if err != nil {
-			log.Error("Failed to drop objects", "schema", conflict.Schema, "error", err, "output", string(output))
-			return fmt.Errorf("删除冲突对象失败: %s, 错误信息: %s", err.Error(), string(output))
+			log.Error("Failed to drop objects", "schema", conflict.Schema, "error", err, "output", output)
+			return fmt.Errorf("删除冲突对象失败: %s, 错误信息: %s", err.Error(), output)
 		}
 
 		log.Info("Dropped conflicting objects successfully", "schema", conflict.Schema)

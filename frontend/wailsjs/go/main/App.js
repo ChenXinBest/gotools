@@ -54,6 +54,14 @@ export function GetSystemProcessInfos() {
   return window['go']['main']['App']['GetSystemProcessInfos']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
+export function GetVersionString() {
+  return window['go']['main']['App']['GetVersionString']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }

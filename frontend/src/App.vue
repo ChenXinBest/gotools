@@ -1,22 +1,21 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted } from 'vue'
+import { RouterView } from 'vue-router'
 import Sidebar from './components/Sidebar.vue'
-import ProcessManager from './components/ProcessManager.vue'
-import DatabaseBackup from './components/DatabaseBackup.vue'
+import { useAppStore } from './stores/app'
 
-const currentTool = ref('process-manager')
+const appStore = useAppStore()
 
-function handleNavigate(toolId) {
-  currentTool.value = toolId
-}
+onMounted(() => {
+  appStore.init()
+})
 </script>
 
 <template>
   <div class="app-container">
-    <Sidebar :current-tool="currentTool" @navigate="handleNavigate" />
+    <Sidebar />
     <div class="main-content">
-      <ProcessManager v-if="currentTool === 'process-manager'" />
-      <DatabaseBackup v-if="currentTool === 'database-backup'" />
+      <RouterView />
     </div>
   </div>
 </template>

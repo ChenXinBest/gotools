@@ -1,12 +1,9 @@
 package tools
 
 import (
-	"compress/gzip"
 	"fmt"
 	"gotools/internal/log"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -17,7 +14,9 @@ const (
 	MySQLDownloadURL     = "https://dev.mysql.com/downloads/"
 )
 
-type MySQLDumpTool struct{}
+type MySQLDumpTool struct {
+	common *CommonTool
+}
 
 type MySQLDumpConfig struct {
 	OutputDir         string
@@ -35,22 +34,22 @@ type MySQLImportConfig struct {
 
 func NewMySQLDumpTool() *MySQLDumpTool {
 	log.Info("Creating new MySQLDumpTool instance")
-	return &MySQLDumpTool{}
+	return &MySQLDumpTool{
+		common: NewCommonTool(),
+	}
 }
 
 func (m *MySQLDumpTool) checkMySQLDumpExists() error {
-	_, err := exec.LookPath("mysqldump")
+	err := m.common.CheckCommandExists("mysqldump")
 	if err != nil {
-		log.Error("mysqldump command not found", "error", err)
 		return fmt.Errorf("%s: 未找到 mysqldump 命令，请先安装 MySQL 客户端工具", ErrMySQLDumpNotFound)
 	}
 	return nil
 }
 
 func (m *MySQLDumpTool) checkMySQLExists() error {
-	_, err := exec.LookPath("mysql")
+	err := m.common.CheckCommandExists("mysql")
 	if err != nil {
-		log.Error("mysql command not found", "error", err)
 		return fmt.Errorf("%s: 未找到 mysql 命令，请先安装 MySQL 客户端工具", ErrMySQLNotFound)
 	}
 	return nil
@@ -60,6 +59,11 @@ func (m *MySQLDumpTool) ConnectDatabase(conn DatabaseConnection) error {
 	if err := m.checkMySQLExists(); err != nil {
 		return err
 	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
 	log.Info("Connecting to database using mysql client", "host", conn.Host, "port", conn.Port, "database", conn.Database)
 
 	args := []string{
@@ -74,12 +78,10 @@ func (m *MySQLDumpTool) ConnectDatabase(conn DatabaseConnection) error {
 		args = append(args, conn.Database)
 	}
 
-	cmd := exec.Command("mysql", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysql", args...)
 	if err != nil {
-		log.Error("Error connecting to database", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", string(output))
-		return fmt.Errorf("连接失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error connecting to database", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", output)
+		return fmt.Errorf("连接失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Connected to database successfully", "host", conn.Host, "port", conn.Port, "database", conn.Database)
@@ -90,6 +92,11 @@ func (m *MySQLDumpTool) ListDatabases(conn DatabaseConnection) ([]string, error)
 	if err := m.checkMySQLExists(); err != nil {
 		return nil, err
 	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return nil, err
+	}
+
 	log.Info("Listing databases using mysql client", "host", conn.Host, "port", conn.Port)
 
 	args := []string{
@@ -100,21 +107,23 @@ func (m *MySQLDumpTool) ListDatabases(conn DatabaseConnection) ([]string, error)
 		"-e", "SHOW DATABASES;",
 	}
 
-	cmd := exec.Command("mysql", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysql", args...)
 	if err != nil {
-		log.Error("Error listing databases", "host", conn.Host, "port", conn.Port, "error", err, "output", string(output))
-		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error listing databases", "host", conn.Host, "port", conn.Port, "error", err, "output", output)
+		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
-	databases := m.parseListOutput(string(output))
+	databases := m.parseListOutput(output)
 	log.Info("Listed databases successfully", "host", conn.Host, "port", conn.Port, "count", len(databases))
 	return databases, nil
 }
 
 func (m *MySQLDumpTool) ListTables(conn DatabaseConnection) ([]string, error) {
 	if err := m.checkMySQLExists(); err != nil {
+		return nil, err
+	}
+
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
 		return nil, err
 	}
 
@@ -133,15 +142,13 @@ func (m *MySQLDumpTool) ListTables(conn DatabaseConnection) ([]string, error) {
 		conn.Database,
 	}
 
-	cmd := exec.Command("mysql", args...)
-	output, err := cmd.CombinedOutput()
-
+	output, err := m.common.ExecuteCommand("mysql", args...)
 	if err != nil {
-		log.Error("Error listing tables", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", string(output))
-		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error listing tables", "host", conn.Host, "port", conn.Port, "database", conn.Database, "error", err, "output", output)
+		return nil, fmt.Errorf("查询失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
-	tables := m.parseListOutput(string(output))
+	tables := m.parseListOutput(output)
 	log.Info("Listed tables successfully", "host", conn.Host, "port", conn.Port, "database", conn.Database, "count", len(tables))
 	return tables, nil
 }
@@ -176,28 +183,27 @@ func (m *MySQLDumpTool) ExportDatabase(conn DatabaseConnection, database string,
 		return err
 	}
 
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
+	if err := m.common.ValidateExportConfig(config.OutputDir); err != nil {
+		return err
+	}
+
 	if database == "" {
 		return fmt.Errorf("数据库名称不能为空")
 	}
 
-	if config.OutputDir == "" {
-		config.OutputDir = "."
-	}
-
-	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
-		log.Error("Failed to create output directory", "path", config.OutputDir, "error", err)
-		return fmt.Errorf("创建导出目录失败: %s", err.Error())
+	if err := m.common.EnsureDirExists(config.OutputDir); err != nil {
+		return err
 	}
 
 	outputFile := m.buildOutputPath(config, database)
 
 	if config.Overwrite {
-		if _, err := os.Stat(outputFile); err == nil {
-			log.Info("Removing existing output file for overwrite", "path", outputFile)
-			if err := os.Remove(outputFile); err != nil {
-				log.Error("Failed to remove existing file", "path", outputFile, "error", err)
-				return fmt.Errorf("删除已存在文件失败: %s", err.Error())
-			}
+		if err := m.common.RemoveIfExists(outputFile); err != nil {
+			return err
 		}
 	}
 
@@ -336,53 +342,7 @@ func (m *MySQLDumpTool) ExportInstance(conn DatabaseConnection, config MySQLDump
 }
 
 func (m *MySQLDumpTool) executeExport(args []string, outputFile string, compression string) error {
-	cmd := exec.Command("mysqldump", args...)
-
-	var outFile *os.File
-	var gzipWriter *gzip.Writer
-	var err error
-
-	if strings.ToLower(compression) == "gzip" {
-		outFile, err = os.Create(outputFile)
-		if err != nil {
-			log.Error("Failed to create output file", "path", outputFile, "error", err)
-			return fmt.Errorf("创建输出文件失败: %s", err.Error())
-		}
-		defer outFile.Close()
-
-		gzipWriter = gzip.NewWriter(outFile)
-		defer gzipWriter.Close()
-
-		cmd.Stdout = gzipWriter
-	} else {
-		cmd.Stdout, err = os.Create(outputFile)
-		if err != nil {
-			log.Error("Failed to create output file", "path", outputFile, "error", err)
-			return fmt.Errorf("创建输出文件失败: %s", err.Error())
-		}
-		defer cmd.Stdout.(*os.File).Close()
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		log.Error("Failed to get stderr pipe", "error", err)
-		return fmt.Errorf("获取标准错误输出失败: %s", err.Error())
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Error("Failed to start mysqldump", "error", err)
-		return fmt.Errorf("启动 mysqldump 失败: %s", err.Error())
-	}
-
-	stderrOutput, _ := io.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		log.Error("Error executing export", "error", err, "stderr", string(stderrOutput))
-		return fmt.Errorf("导出失败: %s, 错误信息: %s", err.Error(), string(stderrOutput))
-	}
-
-	log.Info("Export completed successfully", "output", outputFile)
-	return nil
+	return m.common.ExecuteCommandWithOutputFile("mysqldump", outputFile, compression, args...)
 }
 
 func (m *MySQLDumpTool) buildExportArgs(conn DatabaseConnection, config MySQLDumpConfig) []string {
@@ -415,11 +375,15 @@ func (m *MySQLDumpTool) ImportDump(conn DatabaseConnection, config MySQLImportCo
 		return err
 	}
 
+	if err := m.common.ValidateDatabaseConnection(conn); err != nil {
+		return err
+	}
+
 	if config.InputFile == "" {
 		return fmt.Errorf("输入文件不能为空")
 	}
 
-	if _, err := os.Stat(config.InputFile); os.IsNotExist(err) {
+	if !m.common.FileExists(config.InputFile) {
 		return fmt.Errorf("输入文件不存在: %s", config.InputFile)
 	}
 
@@ -436,34 +400,10 @@ func (m *MySQLDumpTool) ImportDump(conn DatabaseConnection, config MySQLImportCo
 		args = append(args, config.Database)
 	}
 
-	cmd := exec.Command("mysql", args...)
-
-	inputFile, err := os.Open(config.InputFile)
+	_, err := m.common.ExecuteCommandWithInputFile("mysql", config.InputFile, args...)
 	if err != nil {
-		log.Error("Failed to open input file", "path", config.InputFile, "error", err)
-		return fmt.Errorf("打开输入文件失败: %s", err.Error())
-	}
-	defer inputFile.Close()
-
-	isGzip := strings.HasSuffix(strings.ToLower(config.InputFile), ".gz")
-
-	if isGzip {
-		gzipReader, err := gzip.NewReader(inputFile)
-		if err != nil {
-			log.Error("Failed to create gzip reader", "path", config.InputFile, "error", err)
-			return fmt.Errorf("创建解压读取器失败: %s", err.Error())
-		}
-		defer gzipReader.Close()
-
-		cmd.Stdin = gzipReader
-	} else {
-		cmd.Stdin = inputFile
-	}
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error("Error importing dump file", "input", config.InputFile, "error", err, "output", string(output))
-		return fmt.Errorf("导入失败: %s, 错误信息: %s", err.Error(), string(output))
+		log.Error("Error importing dump file", "input", config.InputFile, "error", err)
+		return fmt.Errorf("导入失败: %s", err.Error())
 	}
 
 	log.Info("Imported dump file successfully", "input", config.InputFile, "database", config.Database)
