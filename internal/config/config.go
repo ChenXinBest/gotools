@@ -16,24 +16,32 @@ type DatabaseConnection struct {
 	Database string `json:"database"`
 }
 
+type MySQLShellConfig struct {
+	Threads     int    `json:"threads"`
+	Compression string `json:"compression"`
+	ChunkSize   string `json:"chunk_size"`
+	SkipDefiner bool   `json:"skip_definer"`
+	SkipBinlog  bool   `json:"skip_binlog"`
+	Overwrite   bool   `json:"overwrite"`
+}
+
+type MySQLDumpConfig struct {
+	Compression       string `json:"compression"`
+	SingleTransaction bool   `json:"single_transaction"`
+	Routines          bool   `json:"routines"`
+	Events            bool   `json:"events"`
+	Overwrite         bool   `json:"overwrite"`
+}
+
 type ExportSettings struct {
-	ExportTool       string   `json:"export_tool"`
-	ExportPath       string   `json:"export_path"`
-	LastConnectionID string   `json:"last_connection_id"`
-	LastDatabases    []string `json:"last_databases"`
-	LastDatabase     string   `json:"last_database"`
-	LastTables       []string `json:"last_tables"`
-	Threads          int      `json:"threads"`
-	SkipDefiner      bool     `json:"skip_definer"`
-	SkipBinlog       bool     `json:"skip_binlog"`
-	Compression      string   `json:"compression"`
-	ChunkSize        string   `json:"chunk_size"`
-	ExportScope      string   `json:"export_scope"`
-	IncludeSchemas   string   `json:"include_schemas"`
-	ExcludeSchemas   string   `json:"exclude_schemas"`
-	IncludeTables    string   `json:"include_tables"`
-	ExcludeTables    string   `json:"exclude_tables"`
-	Overwrite        bool     `json:"overwrite"`
+	ExportTool       string           `json:"export_tool"`
+	ExportPath       string           `json:"export_path"`
+	LastConnectionID string           `json:"last_connection_id"`
+	LastDatabases    []string         `json:"last_databases"`
+	LastDatabase     string           `json:"last_database"`
+	LastTables       []string         `json:"last_tables"`
+	MySQLShell       MySQLShellConfig `json:"mysql_shell"`
+	MySQLDump        MySQLDumpConfig  `json:"mysql_dump"`
 }
 
 type Config struct {
@@ -53,11 +61,22 @@ func LoadConfig() (*Config, error) {
 		defaultConfig := &Config{
 			DatabaseConnections: []DatabaseConnection{},
 			ExportSettings: ExportSettings{
-				ExportTool:  "mysql-shell",
-				Threads:     4,
-				Compression: "gzip",
-				SkipDefiner: true,
-				Overwrite:   true,
+				ExportTool: "mysql-shell",
+				MySQLShell: MySQLShellConfig{
+					Threads:     4,
+					Compression: "gzip",
+					ChunkSize:   "64M",
+					SkipDefiner: true,
+					SkipBinlog:  false,
+					Overwrite:   true,
+				},
+				MySQLDump: MySQLDumpConfig{
+					Compression:       "gzip",
+					SingleTransaction: true,
+					Routines:          true,
+					Events:            true,
+					Overwrite:         true,
+				},
 			},
 		}
 		err = SaveConfig(defaultConfig)
@@ -79,14 +98,24 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	if config.ExportSettings.Threads == 0 {
-		config.ExportSettings.Threads = 4
-	}
 	if config.ExportSettings.ExportTool == "" {
 		config.ExportSettings.ExportTool = "mysql-shell"
 	}
-	if config.ExportSettings.Compression == "" {
-		config.ExportSettings.Compression = "gzip"
+
+	// 确保 MySQLShell 配置有默认值
+	if config.ExportSettings.MySQLShell.Threads == 0 {
+		config.ExportSettings.MySQLShell.Threads = 4
+	}
+	if config.ExportSettings.MySQLShell.Compression == "" {
+		config.ExportSettings.MySQLShell.Compression = "gzip"
+	}
+	if config.ExportSettings.MySQLShell.ChunkSize == "" {
+		config.ExportSettings.MySQLShell.ChunkSize = "64M"
+	}
+
+	// 确保 MySQLDump 配置有默认值
+	if config.ExportSettings.MySQLDump.Compression == "" {
+		config.ExportSettings.MySQLDump.Compression = "gzip"
 	}
 
 	return &config, nil

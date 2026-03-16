@@ -3,4 +3,3 @@ node_modules
 frontend/dist
 config.json
 *.exe
-AGENTS.md

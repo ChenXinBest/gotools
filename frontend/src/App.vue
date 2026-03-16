@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import Sidebar from './components/Sidebar.vue'
 import { useAppStore } from './stores/app'
@@ -8,6 +8,13 @@ const appStore = useAppStore()
 
 onMounted(() => {
   appStore.init()
+  // 应用初始主题
+  document.body.className = `theme-${appStore.theme}`
+})
+
+// 监听主题变化
+watch(() => appStore.theme, (newTheme) => {
+  document.body.className = `theme-${newTheme}`
 })
 </script>
 
@@ -28,7 +35,7 @@ onMounted(() => {
 }
 
 body {
-  background-color: #0a0a0a;
+  background-color: var(--bg-primary);
   min-height: 100vh;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
@@ -44,21 +51,21 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: var(--bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a1a;
+  background: var(--border-color);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  background: var(--text-secondary);
 }
 
 ::selection {
-  background: #00ff00;
-  color: #0a0a0a;
+  background: var(--accent-color);
+  color: var(--bg-primary);
 }
 </style>
 
@@ -66,7 +73,7 @@ body {
 .app-container {
   display: flex;
   min-height: 100vh;
-  background: #0a0a0a;
+  background: var(--bg-primary);
 }
 
 .main-content {

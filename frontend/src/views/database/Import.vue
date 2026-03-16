@@ -8,48 +8,63 @@
         <label>数据库连接 *</label>
         <select v-model="selectedConnectionId" class="form-control">
           <option value="">选择数据库连接</option>
-          <option v-for="conn in connections" :key="conn.ID" :value="conn.ID">
-            {{ conn.Name }} ({{ conn.Host }}:{{ conn.Port }})
+          <option v-for="conn in connections" :key="conn.id" :value="conn.id">
+            {{ conn.name }} ({{ conn.host }}:{{ conn.port }})
           </option>
         </select>
       </div>
 
-      <!-- 选择导入目录 -->
+      <!-- 选择导入目录/文件 -->
       <div class="form-group">
-        <label>导入目录 *</label>
+        <label>{{ exportTool === 'mysqldump' ? '导入文件 *' : '导入目录 *' }}</label>
         <div class="path-input">
           <input
-            v-model="inputDir"
+            v-model="inputPath"
             type="text"
-            placeholder="选择导出文件目录"
+            :placeholder="exportTool === 'mysqldump' ? '选择 SQL 文件' : '选择导出文件目录'"
             class="form-control"
             readonly
           />
-          <button @click="selectInputDir" class="browse-btn">浏览</button>
+          <button @click="selectInputPath" class="browse-btn">浏览</button>
         </div>
       </div>
 
-      <!-- 导入选项 -->
-      <div class="form-group">
-        <label>导入选项</label>
-        <div class="options-grid">
-          <div class="option-item">
-            <label>线程数</label>
-            <input v-model.number="options.Threads" type="number" min="1" max="16" class="form-control small" />
+      <!-- 导入选项 - MySQL Shell -->
+      <div class="form-group" v-if="exportTool === 'mysql-shell'">
+        <label>导入选项 (MySQL Shell)</label>
+        <div class="options-section">
+          <div class="options-row">
+            <div class="option-item">
+              <label>线程数</label>
+              <input v-model.number="options.threads" type="number" min="1" max="16" class="form-control small" />
+            </div>
+            <div class="option-item">
+              <label>目标数据库</label>
+              <input v-model="options.schema" type="text" placeholder="可选" class="form-control" />
+            </div>
+            <div class="option-item">
+              <label>等待超时（秒）</label>
+              <input v-model.number="options.wait_timeout" type="number" min="0" class="form-control small" />
+            </div>
           </div>
-          <div class="option-item">
-            <label>目标数据库</label>
-            <input v-model="options.Schema" type="text" placeholder="可选" class="form-control" />
-          </div>
-          <div class="option-item">
+          <div class="options-row checkboxes">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="options.ResetProgress" />
+              <input type="checkbox" v-model="options.reset_progress" />
               <span>重置进度</span>
             </label>
           </div>
-          <div class="option-item">
-            <label>等待超时（秒）</label>
-            <input v-model.number="options.WaitTimeout" type="number" min="0" class="form-control small" />
+        </div>
+      </div>
+
+      <!-- 导入选项 - MySQLDump -->
+      <div class="form-group" v-if="exportTool === 'mysqldump'">
+        <label>导入选项 (mysqldump)</label>
+        <div class="options-section">
+          <div class="options-row">
+            <div class="option-item">
+              <label>目标数据库 *</label>
+              <input v-model="options.database" type="text" placeholder="数据库名" class="form-control" />
+            </div>
           </div>
         </div>
       </div>
@@ -57,6 +72,7 @@
       <!-- 操作按钮 -->
       <div class="form-actions">
         <button
+          v-if="exportTool === 'mysql-shell'"
           @click="checkConflicts"
           class="check-btn"
           :disabled="!canImport || checking"
@@ -86,19 +102,19 @@
         <div class="conflict-list">
           <div v-for="(conflict, index) in conflicts" :key="index" class="conflict-item">
             <div class="conflict-header">
-              <span class="schema-name">{{ conflict.Schema }}</span>
+              <span class="schema-name">{{ conflict.schema }}</span>
               <span class="conflict-count">
                 {{ getTotalConflictCount(conflict) }} 个冲突对象
               </span>
             </div>
             <div class="conflict-details">
-              <div v-if="conflict.Tables.length > 0" class="conflict-type">
+              <div v-if="conflict.tables && conflict.tables.length > 0" class="conflict-type">
                 <span class="type-label">表:</span>
-                <span class="type-items">{{ conflict.Tables.join(', ') }}</span>
+                <span class="type-items">{{ conflict.tables.join(', ') }}</span>
               </div>
-              <div v-if="conflict.Views.length > 0" class="conflict-type">
+              <div v-if="conflict.views && conflict.views.length > 0" class="conflict-type">
                 <span class="type-label">视图:</span>
-                <span class="type-items">{{ conflict.Views.join(', ') }}</span>
+                <span class="type-items">{{ conflict.views.join(', ') }}</span>
               </div>
             </div>
           </div>
@@ -125,9 +141,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDatabaseStore } from '../../stores/database'
+
+const props = defineProps({
+  exportTool: {
+    type: String,
+    default: 'mysql-shell'
+  }
+})
 
 const databaseStore = useDatabaseStore()
 
@@ -137,55 +160,87 @@ const {
   importLoading: importing,
   importProgress,
   importStatus,
-  importConflicts: conflicts
+  importConflicts: conflicts,
+  exportSettings
 } = storeToRefs(databaseStore)
 
 // 从store获取方法
 const {
   fetchConnections,
+  fetchExportSettings,
   importDatabases,
+  importTables,
   checkImportConflicts,
   dropConflictingTables
 } = databaseStore
 
 // 响应式数据
 const selectedConnectionId = ref('')
-const inputDir = ref('')
+const inputPath = ref('')
 const checking = ref(false)
 const importError = ref('')
 
-const options = ref({
-  Threads: 4,
-  Schema: '',
-  ResetProgress: false,
-  WaitTimeout: 300
+// MySQL Shell 选项
+const mysqlShellOptions = ref({
+  threads: 4,
+  schema: '',
+  reset_progress: false,
+  wait_timeout: 300
+})
+
+// MySQLDump 选项
+const mySQLDumpOptions = ref({
+  database: ''
+})
+
+// 当前使用的选项
+const options = computed({
+  get: () => props.exportTool === 'mysql-shell' ? mysqlShellOptions.value : mySQLDumpOptions.value,
+  set: (val) => {
+    if (props.exportTool === 'mysql-shell') {
+      mysqlShellOptions.value = val
+    } else {
+      mySQLDumpOptions.value = val
+    }
+  }
 })
 
 // 计算属性
 const canImport = computed(() => {
-  return selectedConnectionId.value && inputDir.value
+  if (!selectedConnectionId.value || !inputPath.value) return false
+  if (props.exportTool === 'mysqldump' && !options.value.database) return false
+  return true
 })
 
 // 方法
-async function selectInputDir() {
+async function selectInputPath() {
   try {
-    const path = await window.go.main.App.SelectFolder()
+    let path
+    if (props.exportTool === 'mysqldump') {
+      path = await window.go.main.App.SelectFile()
+    } else {
+      path = await window.go.main.App.SelectFolder()
+    }
     if (path) {
-      inputDir.value = path
+      inputPath.value = path
     }
   } catch (err) {
-    console.error('Failed to select folder:', err)
+    console.error('Failed to select path:', err)
   }
 }
 
 function getTotalConflictCount(conflict) {
-  return conflict.Tables.length + conflict.Views.length +
-         conflict.Events.length + conflict.Functions.length + conflict.Procedures.length
+  const tables = conflict.tables?.length || 0
+  const views = conflict.views?.length || 0
+  const events = conflict.events?.length || 0
+  const functions = conflict.functions?.length || 0
+  const procedures = conflict.procedures?.length || 0
+  return tables + views + events + functions + procedures
 }
 
 async function checkConflicts() {
   importError.value = ''
-  const connection = connections.value.find(c => c.ID === selectedConnectionId.value)
+  const connection = connections.value.find(c => c.id === selectedConnectionId.value)
   
   if (!connection) {
     importError.value = '请选择数据库连接'
@@ -194,7 +249,7 @@ async function checkConflicts() {
 
   checking.value = true
   try {
-    await checkImportConflicts(connection, inputDir.value)
+    await checkImportConflicts(connection, inputPath.value)
   } catch (err) {
     importError.value = err.message || '检测冲突失败'
   } finally {
@@ -207,7 +262,7 @@ async function dropConflicts() {
     return
   }
 
-  const connection = connections.value.find(c => c.ID === selectedConnectionId.value)
+  const connection = connections.value.find(c => c.id === selectedConnectionId.value)
   if (!connection) return
 
   try {
@@ -220,7 +275,7 @@ async function dropConflicts() {
 
 async function startImport() {
   importError.value = ''
-  const connection = connections.value.find(c => c.ID === selectedConnectionId.value)
+  const connection = connections.value.find(c => c.id === selectedConnectionId.value)
   
   if (!connection) {
     importError.value = '请选择数据库连接'
@@ -228,18 +283,52 @@ async function startImport() {
   }
 
   try {
-    await importDatabases(connection, {
-      InputDir: inputDir.value,
-      ...options.value
-    })
+    if (props.exportTool === 'mysql-shell') {
+      // 使用 MySQL Shell 导入
+      await importDatabases(connection, {
+        input_dir: inputPath.value,
+        ...options.value
+      })
+    } else {
+      // 使用 mysqldump 导入
+      await window.go.main.App.ImportDumpMySQLDump({
+        connection_id: connection.id,
+        input_file: inputPath.value,
+        database: options.value.database
+      })
+    }
     alert('导入成功！')
   } catch (err) {
     importError.value = err.message || '导入失败'
   }
 }
 
-onMounted(() => {
-  fetchConnections()
+// 初始化选项配置
+function initOptions() {
+  const settings = exportSettings.value
+  if (settings) {
+    // 初始化 MySQL Shell 选项
+    if (settings.mysql_shell) {
+      mysqlShellOptions.value = {
+        threads: settings.mysql_shell.threads || 4,
+        schema: '',
+        reset_progress: false,
+        wait_timeout: 300
+      }
+    }
+  }
+}
+
+onMounted(async () => {
+  await fetchConnections()
+  await fetchExportSettings()
+  initOptions()
+})
+
+// 监听工具切换
+watch(() => props.exportTool, () => {
+  initOptions()
+  inputPath.value = ''
 })
 </script>
 
@@ -253,7 +342,7 @@ onMounted(() => {
 }
 
 .import-form h3 {
-  color: #00ff00;
+  color: var(--accent-color);
   margin-bottom: 1.5rem;
 }
 
@@ -263,24 +352,24 @@ onMounted(() => {
 
 .form-group label {
   display: block;
-  color: #888;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
 
 .form-control {
   width: 100%;
-  background: #0d0d0d;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #fff;
+  color: var(--text-tertiary);
   font-size: 1rem;
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #00ff00;
+  border-color: var(--accent-color);
 }
 
 .form-control.small {
@@ -297,18 +386,42 @@ select.form-control {
 }
 
 .browse-btn {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #00ff00;
+  color: var(--accent-color);
   cursor: pointer;
   transition: all 0.3s;
   white-space: nowrap;
 }
 
 .browse-btn:hover {
-  border-color: #00ff00;
+  border-color: var(--accent-color);
+}
+
+.options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.options-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.options-row.checkboxes {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.options-row .option-item {
+  min-width: 140px;
 }
 
 .options-grid {
@@ -331,7 +444,7 @@ select.form-control {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #ccc;
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 
@@ -353,22 +466,22 @@ select.form-control {
 
 .check-btn {
   background: transparent;
-  border: 1px solid #00ccff;
-  color: #00ccff;
+  border: 1px solid var(--info-color);
+  color: var(--info-color);
 }
 
 .check-btn:hover:not(:disabled) {
-  background: rgba(0, 204, 255, 0.1);
+  background: var(--info-subtle);
 }
 
 .import-btn {
-  background: #00ff00;
+  background: var(--accent-color);
   border: none;
-  color: #000;
+  color: var(--text-on-accent);
 }
 
 .import-btn:hover:not(:disabled) {
-  background: #00cc00;
+  background: var(--accent-hover);
 }
 
 .check-btn:disabled,
@@ -383,7 +496,7 @@ select.form-control {
 
 .progress-bar {
   height: 8px;
-  background: #1a1a1a;
+  background: var(--bg-secondary);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 0.5rem;
@@ -396,12 +509,12 @@ select.form-control {
 
 .progress-fill.checking {
   width: 100%;
-  background: linear-gradient(90deg, #00ccff, #0099cc);
+  background: linear-gradient(90deg, var(--info-color), var(--info-subtle));
   animation: pulse 1.5s infinite;
 }
 
 .progress-fill.importing {
-  background: linear-gradient(90deg, #00ff00, #00cc00);
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
 }
 
 @keyframes pulse {
@@ -414,21 +527,21 @@ select.form-control {
 }
 
 .progress-text {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   text-align: center;
 }
 
 .conflicts-section {
   margin-top: 2rem;
-  background: rgba(255, 68, 68, 0.1);
-  border: 1px solid #ff4444;
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger-color);
   border-radius: 8px;
   padding: 1.5rem;
 }
 
 .conflicts-section h4 {
-  color: #ff4444;
+  color: var(--danger-color);
   margin-bottom: 1rem;
 }
 
@@ -437,7 +550,7 @@ select.form-control {
 }
 
 .conflict-item {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-primary);
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 0.5rem;
@@ -451,12 +564,12 @@ select.form-control {
 }
 
 .schema-name {
-  color: #fff;
+  color: var(--text-tertiary);
   font-weight: bold;
 }
 
 .conflict-count {
-  color: #ff4444;
+  color: var(--danger-color);
   font-size: 0.85rem;
 }
 
@@ -469,35 +582,35 @@ select.form-control {
 }
 
 .type-label {
-  color: #888;
+  color: var(--text-secondary);
   margin-right: 0.5rem;
 }
 
 .type-items {
-  color: #ccc;
+  color: var(--text-tertiary);
   font-size: 0.9rem;
 }
 
 .drop-btn {
-  background: #ff4444;
+  background: var(--danger-color);
   border: none;
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #fff;
+  color: var(--text-on-accent);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .drop-btn:hover {
-  background: #ff6666;
+  background: var(--danger-hover);
 }
 
 .error-message {
-  background: rgba(255, 68, 68, 0.1);
-  border: 1px solid #ff4444;
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger-color);
   border-radius: 6px;
   padding: 1rem;
   margin-top: 1rem;
-  color: #ff4444;
+  color: var(--danger-color);
 }
 </style>

@@ -122,42 +122,22 @@ func ValidateExportSettings(settings ExportSettings) *ValidationResult {
 		result.AddError("ExportPath", "导出路径长度不能超过500个字符")
 	}
 
-	// 验证线程数
-	if settings.Threads < 0 || settings.Threads > 64 {
+	// 验证 MySQLShell 配置
+	if settings.MySQLShell.Threads < 0 || settings.MySQLShell.Threads > 64 {
 		result.AddError("Threads", "线程数必须在0-64之间")
 	}
 
-	// 验证压缩类型
-	if settings.Compression != "" && !containsInSlice(ValidCompressionTypes, settings.Compression) {
+	if settings.MySQLShell.Compression != "" && !containsInSlice(ValidCompressionTypes, settings.MySQLShell.Compression) {
 		result.AddError("Compression", "压缩类型必须是 gzip、gz、zstd 或 none")
 	}
 
-	// 验证分块大小格式
-	if settings.ChunkSize != "" && !isValidChunkSize(settings.ChunkSize) {
+	if settings.MySQLShell.ChunkSize != "" && !isValidChunkSize(settings.MySQLShell.ChunkSize) {
 		result.AddError("ChunkSize", "分块大小格式无效，例如：1G、512M")
 	}
 
-	// 验证导出范围
-	validScopes := []string{"instance", "database", "table"}
-	if settings.ExportScope != "" && !containsInSlice(validScopes, settings.ExportScope) {
-		result.AddError("ExportScope", "导出范围必须是 instance、database 或 table")
-	}
-
-	// 验证包含/排除的模式（可选，但如果提供则检查格式）
-	if settings.IncludeSchemas != "" && !isValidSchemaList(settings.IncludeSchemas) {
-		result.AddError("IncludeSchemas", "包含的模式列表格式无效")
-	}
-
-	if settings.ExcludeSchemas != "" && !isValidSchemaList(settings.ExcludeSchemas) {
-		result.AddError("ExcludeSchemas", "排除的模式列表格式无效")
-	}
-
-	if settings.IncludeTables != "" && !isValidTableList(settings.IncludeTables) {
-		result.AddError("IncludeTables", "包含的表列表格式无效")
-	}
-
-	if settings.ExcludeTables != "" && !isValidTableList(settings.ExcludeTables) {
-		result.AddError("ExcludeTables", "排除的表列表格式无效")
+	// MySQLDump 配置验证（压缩格式）
+	if settings.MySQLDump.Compression != "" && !containsInSlice(ValidCompressionTypes, settings.MySQLDump.Compression) {
+		result.AddError("Compression", "压缩类型必须是 gzip、gz、zstd 或 none")
 	}
 
 	return result
@@ -242,8 +222,8 @@ func isValidHost(host string) bool {
 
 // isValidDatabaseName 验证数据库名称格式
 func isValidDatabaseName(name string) bool {
-	// 数据库名称通常只包含字母、数字和下划线
-	pattern := `^[a-zA-Z_][a-zA-Z0-9_]{0,63}$`
+	// 数据库名称允许字母、数字、下划线和连字符
+	pattern := `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$`
 	matched, _ := regexp.MatchString(pattern, name)
 	return matched
 }

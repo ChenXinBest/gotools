@@ -3,33 +3,34 @@ import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { FaCog, FaDatabase, FaMicrochip, FaSave, FaHome, FaCogs } from "vue-icons-plus/fa";
 import { useAppStore } from "../stores/app";
+import { t } from "../i18n";
 
 const router = useRouter();
 const route = useRoute();
 const appStore = useAppStore();
 
-const menuItems = [
+const menuItems = computed(() => [
     {
-        category: "工具",
+        category: t('sidebar.tool'),
         icon: FaCog,
         items: [
-            { id: "home", name: "首页", icon: FaHome, route: "/" },
-            { id: "process-manager", name: "进程管理器", icon: FaMicrochip, route: "/process-manager" },
+            { id: "home", name: t('sidebar.home'), icon: FaHome, route: "/" },
+            { id: "process-manager", name: t('sidebar.process'), icon: FaMicrochip, route: "/process-manager" },
         ],
     },
     {
-        category: "数据库",
+        category: t('sidebar.database'),
         icon: FaDatabase,
-        items: [{ id: "database-backup", name: "导入/导出", icon: FaSave, route: "/database-backup" }],
+        items: [{ id: "database-backup", name: t('sidebar.importExport'), icon: FaSave, route: "/database-backup" }],
     },
     {
-        category: "设置",
+        category: t('sidebar.settings'),
         icon: FaCogs,
-        items: [{ id: "settings", name: "应用设置", icon: FaCog, route: "/settings" }],
+        items: [{ id: "settings", name: t('sidebar.appSettings'), icon: FaCog, route: "/settings" }],
     },
-];
+]);
 
-const expandedCategories = ref(["工具", "数据库", "设置"]);
+const expandedCategories = ref(["工具", "Tools", "数据库", "Database", "设置", "Settings"]);
 const isCollapsed = ref(appStore.sidebarCollapsed);
 
 const currentRoute = computed(() => route.path);
@@ -132,8 +133,8 @@ function isActive(item) {
 .sidebar {
     width: 220px;
     min-width: 220px;
-    background: #0d0d0d;
-    border-right: 1px solid #1a1a1a;
+    background: var(--bg-tertiary);
+    border-right: 1px solid var(--bg-secondary);
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -150,7 +151,7 @@ function isActive(item) {
 
 .sidebar-header {
     padding: 20px 15px;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--bg-secondary);
     text-align: center;
 }
 
@@ -166,21 +167,21 @@ function isActive(item) {
 }
 
 .logo-icon {
-    color: #00ff00;
+    color: var(--accent-color);
     font-size: 20px;
-    text-shadow: 0 0 10px #00ff00;
+    text-shadow: 0 0 10px var(--accent-color);
 }
 
 .logo-text {
-    color: #00ff00;
+    color: var(--accent-color);
     font-size: 16px;
     font-weight: bold;
     letter-spacing: 2px;
-    text-shadow: 0 0 10px #00ff00;
+    text-shadow: 0 0 10px var(--accent-color);
 }
 
 .version {
-    color: #333;
+    color: var(--text-placeholder);
     font-size: 10px;
     margin-top: 5px;
     letter-spacing: 1px;
@@ -201,7 +202,7 @@ function isActive(item) {
     align-items: center;
     padding: 10px 15px;
     cursor: pointer;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 12px;
     letter-spacing: 1px;
     transition: all 0.2s;
@@ -213,8 +214,8 @@ function isActive(item) {
 }
 
 .menu-category:hover {
-    color: #00ff00;
-    background: rgba(0, 255, 0, 0.05);
+    color: var(--accent-color);
+    background: var(--accent-subtle);
 }
 
 .category-icon {
@@ -262,7 +263,7 @@ function isActive(item) {
     align-items: center;
     padding: 8px 15px 8px 25px;
     cursor: pointer;
-    color: #444;
+    color: var(--text-placeholder);
     font-size: 12px;
     letter-spacing: 1px;
     transition: all 0.2s;
@@ -276,19 +277,19 @@ function isActive(item) {
 }
 
 .menu-item:hover {
-    color: #00ff00;
-    background: rgba(0, 255, 0, 0.05);
+    color: var(--accent-color);
+    background: var(--accent-subtle);
 }
 
 .menu-item.active {
-    color: #00ff00;
-    background: rgba(0, 255, 0, 0.1);
-    border-left-color: #00ff00;
+    color: var(--accent-color);
+    background: var(--accent-subtle);
+    border-left-color: var(--accent-color);
 }
 
 .sidebar.collapsed .menu-item.active {
     border-left: none;
-    background: rgba(0, 255, 0, 0.1);
+    background: var(--accent-subtle);
 }
 
 .item-icon {
@@ -316,18 +317,18 @@ function isActive(item) {
 
 .sidebar-footer {
     padding: 15px;
-    border-top: 1px solid #1a1a1a;
+    border-top: 1px solid var(--bg-secondary);
     text-align: center;
 }
 
 .footer-line {
     height: 1px;
-    background: linear-gradient(90deg, transparent, #00ff00, transparent);
+    background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
     margin-bottom: 10px;
 }
 
 .footer-text {
-    color: #333;
+    color: var(--text-placeholder);
     font-size: 10px;
     text-align: center;
     letter-spacing: 2px;
@@ -340,11 +341,11 @@ function isActive(item) {
     transform: translateY(-50%);
     width: 20px;
     height: 40px;
-    background: #0d0d0d;
-    border: 1px solid #1a1a1a;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--bg-secondary);
     border-left: none;
     border-radius: 0 5px 5px 0;
-    color: #666;
+    color: var(--text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -354,8 +355,8 @@ function isActive(item) {
 }
 
 .toggle-button:hover {
-    color: #00ff00;
-    background: rgba(0, 255, 0, 0.05);
+    color: var(--accent-color);
+    background: var(--accent-subtle);
 }
 
 .toggle-button span {
@@ -371,11 +372,11 @@ function isActive(item) {
 }
 
 ::-webkit-scrollbar-track {
-    background: #0d0d0d;
+    background: var(--bg-tertiary);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #1a1a1a;
+    background: var(--bg-secondary);
     border-radius: 2px;
 }
 </style>

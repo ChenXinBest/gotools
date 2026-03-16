@@ -36,12 +36,23 @@ export const useDatabaseStore = defineStore('database', () => {
 
   // 导出状态
   const exportSettings = ref({
-    ExportTool: 'mysql-shell',
-    ExportPath: '',
-    Threads: 4,
-    Compression: 'gzip',
-    SkipDefiner: true,
-    Overwrite: true
+    export_tool: 'mysql-shell',
+    export_path: '',
+    mysql_shell: {
+      threads: 4,
+      compression: 'gzip',
+      chunk_size: '64M',
+      skip_definer: true,
+      skip_binlog: false,
+      overwrite: true
+    },
+    mysql_dump: {
+      compression: 'gzip',
+      single_transaction: true,
+      routines: true,
+      events: true,
+      overwrite: true
+    }
   })
   const exportLoading = ref(false)
   const exportProgress = ref(0)
@@ -61,9 +72,9 @@ export const useDatabaseStore = defineStore('database', () => {
 
   const connectionOptions = computed(() => {
     return connections.value.map(conn => ({
-      value: conn.ID,
-      label: conn.Name,
-      description: `${conn.Host}:${conn.Port}`
+      value: conn.id,
+      label: conn.name,
+      description: `${conn.host}:${conn.port}`
     }))
   })
 
@@ -124,7 +135,7 @@ export const useDatabaseStore = defineStore('database', () => {
       await fetchConnections()
       
       // 如果删除的是当前连接，清除当前连接
-      if (currentConnection.value?.ID === id) {
+      if (currentConnection.value?.id === id) {
         currentConnection.value = null
       }
       
@@ -147,7 +158,7 @@ export const useDatabaseStore = defineStore('database', () => {
   }
 
   function selectConnection(id) {
-    const conn = connections.value.find(c => c.ID === id)
+    const conn = connections.value.find(c => c.id === id)
     currentConnection.value = conn || null
   }
 
@@ -242,25 +253,25 @@ export const useDatabaseStore = defineStore('database', () => {
 
     try {
       const request = {
-        ConnectionID: connection.ID,
-        Databases: databases,
-        OutputDir: config.OutputDir,
-        Threads: config.Threads || exportSettings.value.Threads,
-        Compression: config.Compression || exportSettings.value.Compression,
-        Overwrite: config.Overwrite ?? exportSettings.value.Overwrite,
-        SkipDefiner: config.SkipDefiner ?? exportSettings.value.SkipDefiner,
-        SkipBinlog: config.SkipBinlog ?? exportSettings.value.SkipBinlog
+        connection_id: connection.id,
+        databases: databases,
+        output_dir: config.output_dir,
+        threads: config.threads || exportSettings.value.Threads,
+        compression: config.compression || exportSettings.value.Compression,
+        overwrite: config.overwrite ?? exportSettings.value.Overwrite,
+        skip_definer: config.skip_definer ?? exportSettings.value.SkipDefiner,
+        skip_binlog: config.skip_binlog ?? exportSettings.value.SkipBinlog
       }
 
       exportStatus.value = '正在导出...'
       const result = await ExportDatabases(request)
       
-      if (result.Success) {
+      if (result.success) {
         exportStatus.value = '导出完成'
         exportProgress.value = 100
         return result
       } else {
-        throw new Error(result.Message)
+        throw new Error(result.message)
       }
     } catch (err) {
       exportStatus.value = '导出失败'
@@ -277,26 +288,26 @@ export const useDatabaseStore = defineStore('database', () => {
 
     try {
       const request = {
-        ConnectionID: connection.ID,
-        Database: database,
-        Tables: tables,
-        OutputDir: config.OutputDir,
-        Threads: config.Threads || exportSettings.value.Threads,
-        Compression: config.Compression || exportSettings.value.Compression,
-        Overwrite: config.Overwrite ?? exportSettings.value.Overwrite,
-        SkipDefiner: config.SkipDefiner ?? exportSettings.value.SkipDefiner,
-        SkipBinlog: config.SkipBinlog ?? exportSettings.value.SkipBinlog
+        connection_id: connection.id,
+        database: database,
+        tables: tables,
+        output_dir: config.output_dir,
+        threads: config.threads || exportSettings.value.Threads,
+        compression: config.compression || exportSettings.value.Compression,
+        overwrite: config.overwrite ?? exportSettings.value.Overwrite,
+        skip_definer: config.skip_definer ?? exportSettings.value.SkipDefiner,
+        skip_binlog: config.skip_binlog ?? exportSettings.value.SkipBinlog
       }
 
       exportStatus.value = '正在导出...'
       const result = await ExportTables(request)
       
-      if (result.Success) {
+      if (result.success) {
         exportStatus.value = '导出完成'
         exportProgress.value = 100
         return result
       } else {
-        throw new Error(result.Message)
+        throw new Error(result.message)
       }
     } catch (err) {
       exportStatus.value = '导出失败'
@@ -314,23 +325,23 @@ export const useDatabaseStore = defineStore('database', () => {
 
     try {
       const request = {
-        ConnectionID: connection.ID,
-        InputDir: config.InputDir,
-        Threads: config.Threads || exportSettings.value.Threads,
-        Schema: config.Schema,
-        ResetProgress: config.ResetProgress,
-        WaitTimeout: config.WaitTimeout
+        connection_id: connection.id,
+        input_dir: config.input_dir,
+        threads: config.threads || exportSettings.value.Threads,
+        schema: config.schema,
+        reset_progress: config.reset_progress,
+        wait_timeout: config.wait_timeout
       }
 
       importStatus.value = '正在导入...'
       const result = await ImportDatabases(request)
       
-      if (result.Success) {
+      if (result.success) {
         importStatus.value = '导入完成'
         importProgress.value = 100
         return result
       } else {
-        throw new Error(result.Message)
+        throw new Error(result.message)
       }
     } catch (err) {
       importStatus.value = '导入失败'
@@ -347,23 +358,23 @@ export const useDatabaseStore = defineStore('database', () => {
 
     try {
       const request = {
-        ConnectionID: connection.ID,
-        Database: database,
-        InputDir: config.InputDir,
-        Threads: config.Threads || exportSettings.value.Threads,
-        ResetProgress: config.ResetProgress,
-        WaitTimeout: config.WaitTimeout
+        connection_id: connection.id,
+        database: database,
+        input_dir: config.input_dir,
+        threads: config.threads || exportSettings.value.Threads,
+        reset_progress: config.reset_progress,
+        wait_timeout: config.wait_timeout
       }
 
       importStatus.value = '正在导入...'
       const result = await ImportTables(request)
       
-      if (result.Success) {
+      if (result.success) {
         importStatus.value = '导入完成'
         importProgress.value = 100
         return result
       } else {
-        throw new Error(result.Message)
+        throw new Error(result.message)
       }
     } catch (err) {
       importStatus.value = '导入失败'
@@ -377,12 +388,12 @@ export const useDatabaseStore = defineStore('database', () => {
   async function checkImportConflicts(connection, inputDir) {
     try {
       const request = {
-        ConnectionID: connection.ID,
-        InputDir: inputDir
+        connection_id: connection.id,
+        input_dir: inputDir
       }
 
       const result = await CheckImportConflicts(request)
-      importConflicts.value = result.Conflicts || []
+      importConflicts.value = result.conflicts || []
       return result
     } catch (err) {
       console.error('Failed to check import conflicts:', err)
@@ -393,8 +404,8 @@ export const useDatabaseStore = defineStore('database', () => {
   async function dropConflictingTables(connection, conflicts) {
     try {
       const request = {
-        ConnectionID: connection.ID,
-        Conflicts: conflicts
+        connection_id: connection.id,
+        conflicts: conflicts
       }
 
       await DropConflictingTables(request)

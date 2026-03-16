@@ -87,12 +87,12 @@ onMounted(() => {
 
 .welcome-section h1 {
   font-size: 2.5rem;
-  color: #00ff00;
+  color: var(--accent-color);
   margin-bottom: 0.5rem;
 }
 
 .subtitle {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 1.2rem;
 }
 
@@ -104,8 +104,8 @@ onMounted(() => {
 }
 
 .tool-card {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 2rem;
   cursor: pointer;
@@ -113,9 +113,9 @@ onMounted(() => {
 }
 
 .tool-card:hover {
-  border-color: #00ff00;
+  border-color: var(--accent-color);
   transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0, 255, 0, 0.1);
+  box-shadow: 0 10px 30px var(--accent-subtle);
 }
 
 .tool-icon {
@@ -124,25 +124,25 @@ onMounted(() => {
 }
 
 .tool-name {
-  color: #fff;
+  color: var(--text-tertiary);
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
 }
 
 .tool-description {
-  color: #888;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .features-section {
-  background: #1a1a1a;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 2rem;
   margin-bottom: 2rem;
 }
 
 .features-section h2 {
-  color: #00ff00;
+  color: var(--accent-color);
   margin-bottom: 1.5rem;
 }
 
@@ -152,7 +152,7 @@ onMounted(() => {
 }
 
 .features-list li {
-  color: #ccc;
+  color: var(--text-tertiary);
   padding: 0.5rem 0;
   padding-left: 1.5rem;
   position: relative;
@@ -160,14 +160,14 @@ onMounted(() => {
 
 .features-list li::before {
   content: '✓';
-  color: #00ff00;
+  color: var(--accent-color);
   position: absolute;
   left: 0;
 }
 
 .version-info {
   text-align: center;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 

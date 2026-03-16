@@ -24,6 +24,48 @@ export namespace config {
 	        this.database = source["database"];
 	    }
 	}
+	export class MySQLDumpConfig {
+	    compression: string;
+	    single_transaction: boolean;
+	    routines: boolean;
+	    events: boolean;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MySQLDumpConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.compression = source["compression"];
+	        this.single_transaction = source["single_transaction"];
+	        this.routines = source["routines"];
+	        this.events = source["events"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
+	export class MySQLShellConfig {
+	    threads: number;
+	    compression: string;
+	    chunk_size: string;
+	    skip_definer: boolean;
+	    skip_binlog: boolean;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MySQLShellConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.threads = source["threads"];
+	        this.compression = source["compression"];
+	        this.chunk_size = source["chunk_size"];
+	        this.skip_definer = source["skip_definer"];
+	        this.skip_binlog = source["skip_binlog"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
 	export class ExportSettings {
 	    export_tool: string;
 	    export_path: string;
@@ -31,17 +73,8 @@ export namespace config {
 	    last_databases: string[];
 	    last_database: string;
 	    last_tables: string[];
-	    threads: number;
-	    skip_definer: boolean;
-	    skip_binlog: boolean;
-	    compression: string;
-	    chunk_size: string;
-	    export_scope: string;
-	    include_schemas: string;
-	    exclude_schemas: string;
-	    include_tables: string;
-	    exclude_tables: string;
-	    overwrite: boolean;
+	    mysql_shell: MySQLShellConfig;
+	    mysql_dump: MySQLDumpConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportSettings(source);
@@ -55,19 +88,29 @@ export namespace config {
 	        this.last_databases = source["last_databases"];
 	        this.last_database = source["last_database"];
 	        this.last_tables = source["last_tables"];
-	        this.threads = source["threads"];
-	        this.skip_definer = source["skip_definer"];
-	        this.skip_binlog = source["skip_binlog"];
-	        this.compression = source["compression"];
-	        this.chunk_size = source["chunk_size"];
-	        this.export_scope = source["export_scope"];
-	        this.include_schemas = source["include_schemas"];
-	        this.exclude_schemas = source["exclude_schemas"];
-	        this.include_tables = source["include_tables"];
-	        this.exclude_tables = source["exclude_tables"];
-	        this.overwrite = source["overwrite"];
+	        this.mysql_shell = this.convertValues(source["mysql_shell"], MySQLShellConfig);
+	        this.mysql_dump = this.convertValues(source["mysql_dump"], MySQLDumpConfig);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 
 }
 

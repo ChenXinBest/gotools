@@ -5,7 +5,7 @@
 # go build -ldflags "$(cat build.ldflags)"
 
 # 变量定义（在 internal/version 包中）
--X gotools/internal/version.Version=
+-X gotools/internal/version.Version=V1.0.0
 -X gotools/internal/version.BuildTime=
 -X gotools/internal/version.GitCommit=
 -X gotools/internal/version.GitBranch=

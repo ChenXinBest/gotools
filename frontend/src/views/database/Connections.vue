@@ -12,38 +12,38 @@
     <div class="connection-list" v-if="!loading">
       <div
         v-for="conn in connections"
-        :key="conn.ID"
+        :key="conn.id"
         class="connection-card"
-        :class="{ active: currentConnection?.ID === conn.ID }"
+        :class="{ active: currentConnection?.id === conn.id }"
         @click="selectConnection(conn)"
       >
         <div class="connection-header">
-          <h3 class="connection-name">{{ conn.Name }}</h3>
+          <h3 class="connection-name">{{ conn.name }}</h3>
           <div class="connection-actions">
             <button @click.stop="editConnection(conn)" class="edit-btn">编辑</button>
-            <button @click.stop="deleteConnection(conn.ID)" class="delete-btn">删除</button>
+            <button @click.stop="deleteConnection(conn.id)" class="delete-btn">删除</button>
           </div>
         </div>
         <div class="connection-info">
           <div class="info-item">
             <span class="info-label">主机:</span>
-            <span class="info-value">{{ conn.Host }}:{{ conn.Port }}</span>
+            <span class="info-value">{{ conn.host }}:{{ conn.port }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">用户:</span>
-            <span class="info-value">{{ conn.User }}</span>
+            <span class="info-value">{{ conn.user }}</span>
           </div>
-          <div class="info-item" v-if="conn.Database">
+          <div class="info-item" v-if="conn.database">
             <span class="info-label">数据库:</span>
-            <span class="info-value">{{ conn.Database }}</span>
+            <span class="info-value">{{ conn.database }}</span>
           </div>
         </div>
         <div class="connection-footer">
-          <button @click.stop="testConnection(conn)" class="test-btn" :disabled="testingConnection === conn.ID">
-            {{ testingConnection === conn.ID ? '测试中...' : '测试连接' }}
+          <button @click.stop="testConnection(conn)" class="test-btn" :disabled="testingConnection === conn.id">
+            {{ testingConnection === conn.id ? '测试中...' : '测试连接' }}
           </button>
-          <span v-if="connectionStatus[conn.ID]" class="status-badge" :class="connectionStatus[conn.ID].success ? 'success' : 'error'">
-            {{ connectionStatus[conn.ID].message }}
+          <span v-if="connectionStatus[conn.id]" class="status-badge" :class="connectionStatus[conn.id].success ? 'success' : 'error'">
+            {{ connectionStatus[conn.id].message }}
           </span>
         </div>
       </div>
@@ -69,31 +69,31 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>连接名称 *</label>
-            <input v-model="formData.Name" type="text" placeholder="输入连接名称" />
+            <input v-model="formData.name" type="text" placeholder="输入连接名称" />
           </div>
           <div class="form-row">
             <div class="form-group flex-1">
               <label>主机地址 *</label>
-              <input v-model="formData.Host" type="text" placeholder="localhost" />
+              <input v-model="formData.host" type="text" placeholder="localhost" />
             </div>
             <div class="form-group" style="width: 100px;">
               <label>端口 *</label>
-              <input v-model.number="formData.Port" type="number" placeholder="3306" />
+              <input v-model.number="formData.port" type="number" placeholder="3306" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group flex-1">
               <label>用户名 *</label>
-              <input v-model="formData.User" type="text" placeholder="root" />
+              <input v-model="formData.user" type="text" placeholder="root" />
             </div>
             <div class="form-group flex-1">
               <label>密码</label>
-              <input v-model="formData.Password" type="password" placeholder="可选" />
+              <input v-model="formData.password" type="password" placeholder="可选" />
             </div>
           </div>
           <div class="form-group">
             <label>默认数据库</label>
-            <input v-model="formData.Database" type="text" placeholder="可选" />
+            <input v-model="formData.database" type="text" placeholder="可选" />
           </div>
         </div>
         <div class="dialog-footer">
@@ -139,13 +139,13 @@ const testingConnection = ref(null)
 const connectionStatus = ref({})
 
 const formData = ref({
-  ID: '',
-  Name: '',
-  Host: 'localhost',
-  Port: 3306,
-  User: 'root',
-  Password: '',
-  Database: ''
+  id: '',
+  name: '',
+  host: 'localhost',
+  port: 3306,
+  user: 'root',
+  password: '',
+  database: ''
 })
 
 // 方法
@@ -154,7 +154,7 @@ function refreshConnections() {
 }
 
 function selectConnection(conn) {
-  storeSelectConnection(conn.ID)
+  storeSelectConnection(conn.id)
 }
 
 function editConnection(conn) {
@@ -169,15 +169,15 @@ async function deleteConnection(id) {
 }
 
 async function testConnection(conn) {
-  testingConnection.value = conn.ID
+  testingConnection.value = conn.id
   try {
     const success = await databaseStore.testConnection(conn)
-    connectionStatus.value[conn.ID] = {
+    connectionStatus.value[conn.id] = {
       success,
       message: success ? '连接成功' : '连接失败'
     }
   } catch (err) {
-    connectionStatus.value[conn.ID] = {
+    connectionStatus.value[conn.id] = {
       success: false,
       message: '连接失败: ' + err.message
     }
@@ -196,13 +196,13 @@ function closeDialog() {
 
 function resetForm() {
   formData.value = {
-    ID: '',
-    Name: '',
-    Host: 'localhost',
-    Port: 3306,
-    User: 'root',
-    Password: '',
-    Database: ''
+    id: '',
+    name: '',
+    host: 'localhost',
+    port: 3306,
+    user: 'root',
+    password: '',
+    database: ''
   }
 }
 
@@ -240,18 +240,18 @@ onMounted(() => {
 
 .add-btn,
 .refresh-btn {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #fff;
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .add-btn:hover {
-  border-color: #00ff00;
-  color: #00ff00;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
 .refresh-btn:disabled {
@@ -265,8 +265,8 @@ onMounted(() => {
 }
 
 .connection-card {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
@@ -274,12 +274,12 @@ onMounted(() => {
 }
 
 .connection-card:hover {
-  border-color: #00ff00;
+  border-color: var(--accent-color);
 }
 
 .connection-card.active {
-  border-color: #00ff00;
-  background: rgba(0, 255, 0, 0.05);
+  border-color: var(--accent-color);
+  background: var(--accent-subtle);
 }
 
 .connection-header {
@@ -290,7 +290,7 @@ onMounted(() => {
 }
 
 .connection-name {
-  color: #fff;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -302,23 +302,23 @@ onMounted(() => {
 .edit-btn,
 .delete-btn {
   background: transparent;
-  border: 1px solid #333;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 0.25rem 0.75rem;
-  color: #888;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.85rem;
   transition: all 0.3s;
 }
 
 .edit-btn:hover {
-  border-color: #00ccff;
-  color: #00ccff;
+  border-color: var(--info-color);
+  color: var(--info-color);
 }
 
 .delete-btn:hover {
-  border-color: #ff4444;
-  color: #ff4444;
+  border-color: var(--danger-color);
+  color: var(--danger-color);
 }
 
 .connection-info {
@@ -333,12 +333,12 @@ onMounted(() => {
 }
 
 .info-label {
-  color: #888;
+  color: var(--text-secondary);
   min-width: 60px;
 }
 
 .info-value {
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .connection-footer {
@@ -349,17 +349,17 @@ onMounted(() => {
 
 .test-btn {
   background: transparent;
-  border: 1px solid #00ff00;
+  border: 1px solid var(--accent-color);
   border-radius: 4px;
   padding: 0.25rem 0.75rem;
-  color: #00ff00;
+  color: var(--accent-color);
   cursor: pointer;
   font-size: 0.85rem;
   transition: all 0.3s;
 }
 
 .test-btn:hover:not(:disabled) {
-  background: rgba(0, 255, 0, 0.1);
+  background: var(--accent-subtle);
 }
 
 .test-btn:disabled {
@@ -374,19 +374,19 @@ onMounted(() => {
 }
 
 .status-badge.success {
-  background: rgba(0, 255, 0, 0.2);
-  color: #00ff00;
+  background: var(--accent-subtle);
+  color: var(--accent-color);
 }
 
 .status-badge.error {
-  background: rgba(255, 68, 68, 0.2);
-  color: #ff4444;
+  background: var(--danger-subtle);
+  color: var(--danger-color);
 }
 
 .no-data {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .loading {
@@ -400,8 +400,8 @@ onMounted(() => {
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #1a1a1a;
-  border-top-color: #00ff00;
+  border: 3px solid var(--bg-secondary);
+  border-top-color: var(--accent-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -419,7 +419,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--shadow-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,8 +427,8 @@ onMounted(() => {
 }
 
 .dialog {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 100%;
   max-width: 500px;
@@ -439,24 +439,24 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .dialog-header h3 {
-  color: #fff;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--text-secondary);
   font-size: 1.5rem;
   cursor: pointer;
 }
 
 .close-btn:hover {
-  color: #fff;
+  color: var(--text-tertiary);
 }
 
 .dialog-body {
@@ -469,24 +469,24 @@ onMounted(() => {
 
 .form-group label {
   display: block;
-  color: #888;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
 
 .form-group input {
   width: 100%;
-  background: #0d0d0d;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #fff;
+  color: var(--text-tertiary);
   font-size: 1rem;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #00ff00;
+  border-color: var(--accent-color);
 }
 
 .form-row {
@@ -503,7 +503,7 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 1rem;
   padding: 1.5rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-color);
 }
 
 .cancel-btn,
@@ -517,23 +517,23 @@ onMounted(() => {
 
 .cancel-btn {
   background: transparent;
-  border: 1px solid #333;
-  color: #888;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 
 .cancel-btn:hover {
-  border-color: #666;
-  color: #fff;
+  border-color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .save-btn {
-  background: #00ff00;
+  background: var(--accent-color);
   border: none;
-  color: #000;
+  color: var(--text-on-accent);
 }
 
 .save-btn:hover:not(:disabled) {
-  background: #00cc00;
+  background: var(--accent-hover);
 }
 
 .save-btn:disabled {

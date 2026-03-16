@@ -3,6 +3,7 @@ package tools_test
 import (
 	"testing"
 
+	"gotools/internal/config"
 	"gotools/internal/tools"
 )
 
@@ -135,12 +136,13 @@ func TestValidateExportSettings(t *testing.T) {
 		{
 			name: "Valid settings",
 			settings: tools.ExportSettings{
-				ExportTool:  "mysql-shell",
-				ExportPath:  "/tmp/export",
-				Threads:     4,
-				Compression: "gzip",
-				ChunkSize:   "1G",
-				ExportScope: "database",
+				ExportTool: "mysql-shell",
+				ExportPath: "/tmp/export",
+				MySQLShell: config.MySQLShellConfig{
+					Threads:     4,
+					Compression: "gzip",
+					ChunkSize:   "1G",
+				},
 			},
 			wantValid: true,
 		},
@@ -154,35 +156,36 @@ func TestValidateExportSettings(t *testing.T) {
 		{
 			name: "Invalid threads (negative)",
 			settings: tools.ExportSettings{
-				Threads: -1,
+				MySQLShell: config.MySQLShellConfig{
+					Threads: -1,
+				},
 			},
 			wantValid: false,
 		},
 		{
 			name: "Invalid threads (too high)",
 			settings: tools.ExportSettings{
-				Threads: 100,
+				MySQLShell: config.MySQLShellConfig{
+					Threads: 100,
+				},
 			},
 			wantValid: false,
 		},
 		{
 			name: "Invalid compression",
 			settings: tools.ExportSettings{
-				Compression: "invalid",
+				MySQLShell: config.MySQLShellConfig{
+					Compression: "invalid",
+				},
 			},
 			wantValid: false,
 		},
 		{
 			name: "Invalid chunk size",
 			settings: tools.ExportSettings{
-				ChunkSize: "invalid",
-			},
-			wantValid: false,
-		},
-		{
-			name: "Invalid export scope",
-			settings: tools.ExportSettings{
-				ExportScope: "invalid",
+				MySQLShell: config.MySQLShellConfig{
+					ChunkSize: "invalid",
+				},
 			},
 			wantValid: false,
 		},
@@ -356,12 +359,13 @@ func TestValidateAll(t *testing.T) {
 	}
 
 	exportSettings := tools.ExportSettings{
-		ExportTool:  "mysql-shell",
-		ExportPath:  "/tmp/export",
-		Threads:     4,
-		Compression: "gzip",
-		ChunkSize:   "1G",
-		ExportScope: "database",
+		ExportTool: "mysql-shell",
+		ExportPath: "/tmp/export",
+		MySQLShell: config.MySQLShellConfig{
+			Threads:     4,
+			Compression: "gzip",
+			ChunkSize:   "1G",
+		},
 	}
 
 	exportConfig := tools.ExportConfig{
@@ -393,9 +397,11 @@ func TestValidateAll(t *testing.T) {
 	}
 
 	invalidSettings := tools.ExportSettings{
-		ExportTool:  "invalid",
-		Compression: "invalid",
-		Threads:     -1,
+		ExportTool: "invalid",
+		MySQLShell: config.MySQLShellConfig{
+			Compression: "invalid",
+			Threads:     -1,
+		},
 	}
 
 	invalidExportConfig := tools.ExportConfig{
