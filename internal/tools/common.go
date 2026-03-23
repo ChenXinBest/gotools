@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,7 +119,11 @@ func (c *CommonTool) ValidateExportConfig(outputDir string) error {
 
 // BuildDatabaseURI 构建数据库连接URI
 func (c *CommonTool) BuildDatabaseURI(conn DatabaseConnection, includeDatabase bool) string {
-	uri := fmt.Sprintf("%s:%s@%s:%d", conn.User, conn.Password, conn.Host, conn.Port)
+	// 对用户名和密码进行 URL 编码，避免特殊字符导致连接失败
+	encodedUser := url.QueryEscape(conn.User)
+	encodedPassword := url.QueryEscape(conn.Password)
+
+	uri := fmt.Sprintf("%s:%s@%s:%d", encodedUser, encodedPassword, conn.Host, conn.Port)
 	if includeDatabase && conn.Database != "" {
 		uri += "/" + conn.Database
 	}

@@ -660,10 +660,6 @@ func (m *MySQLShellTool) buildImportOptions(config ImportConfig) map[string]any 
 		options["resetProgress"] = true
 	}
 
-	if config.WaitTimeout > 0 {
-		options["waitTimeout"] = config.WaitTimeout
-	}
-
 	return options
 }
 
@@ -710,10 +706,6 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 
 	if config.ResetProgress {
 		options["resetProgress"] = true
-	}
-
-	if config.WaitTimeout > 0 {
-		options["waitTimeout"] = config.WaitTimeout
 	}
 
 	optionsJSON, _ := json.Marshal(options)

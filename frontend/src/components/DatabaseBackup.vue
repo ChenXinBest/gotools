@@ -1,6 +1,28 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
-import { AddDatabaseConnection, UpdateDatabaseConnection, GetDatabaseConnections, ListDatabases, ListTables, SelectFolder, SelectFile, SelectSaveFile, GetExportSettings, SaveExportSettings, ExportDatabases, ExportTables, ImportDatabases, ImportTables, CheckImportConflicts, DropConflictingTables, ListDatabasesMySQLDump, ListTablesMySQLDump, ExportDatabasesMySQLDump, ExportTablesMySQLDump, ImportDumpMySQLDump } from "../../wailsjs/go/main/App";
+import {
+    AddDatabaseConnection,
+    UpdateDatabaseConnection,
+    GetDatabaseConnections,
+    ListDatabases,
+    ListTables,
+    SelectFolder,
+    SelectFile,
+    SelectSaveFile,
+    GetExportSettings,
+    SaveExportSettings,
+    ExportDatabases,
+    ExportTables,
+    ImportDatabases,
+    ImportTables,
+    CheckImportConflicts,
+    DropConflictingTables,
+    ListDatabasesMySQLDump,
+    ListTablesMySQLDump,
+    ExportDatabasesMySQLDump,
+    ExportTablesMySQLDump,
+    ImportDumpMySQLDump,
+} from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { FaSave, FaDownload, FaUpload } from "vue-icons-plus/fa";
 
@@ -50,14 +72,14 @@ const mysqlShellParams = ref({
     includeSchemas: "",
     excludeSchemas: "",
     includeTables: "",
-    excludeTables: ""
+    excludeTables: "",
 });
 const mysqlDumpParams = ref({
     compression: "gzip",
     singleTransaction: true,
     routines: true,
     events: false,
-    overwrite: true
+    overwrite: true,
 });
 const isLoadingTables = ref(false);
 
@@ -69,14 +91,13 @@ const importParams = ref({
     threads: 4,
     schema: "",
     resetProgress: true,
-    waitTimeout: 0,
     includeSchemas: "",
     excludeSchemas: "",
     includeTables: "",
-    excludeTables: ""
+    excludeTables: "",
 });
 const mysqlDumpImportParams = ref({
-    database: ""
+    database: "",
 });
 const showImportConfigModal = ref(false);
 const isImporting = ref(false);
@@ -106,9 +127,9 @@ const canExport = computed(() => {
 
 // 导出配置模态框计算属性
 const canConfirmExport = computed(() => {
-    if (exportScope.value === 'database') {
+    if (exportScope.value === "database") {
         return selectedDatabases.value.size > 0;
-    } else if (exportScope.value === 'table') {
+    } else if (exportScope.value === "table") {
         return exportDatabase.value && exportTables.value.size > 0;
     }
     return false;
@@ -120,12 +141,12 @@ const canImport = computed(() => {
 
 const canConfirmImport = computed(() => {
     if (!importPath.value) return false;
-    if (exportTool.value === 'mysqldump') {
+    if (exportTool.value === "mysqldump") {
         return true;
     }
-    if (importScope.value === 'database') {
+    if (importScope.value === "database") {
         return true;
-    } else if (importScope.value === 'table') {
+    } else if (importScope.value === "table") {
         return importDatabase.value;
     }
     return false;
@@ -136,14 +157,14 @@ async function loadConnections() {
     try {
         const connList = await GetDatabaseConnections();
         // 转换后端返回的数据结构以匹配前端使用的结构
-        connections.value = connList.map(conn => ({
+        connections.value = connList.map((conn) => ({
             id: conn.id,
             name: conn.name,
             host: conn.host,
             port: conn.port,
             user: conn.user,
             password: conn.password,
-            defaultSchema: conn.database
+            defaultSchema: conn.database,
         }));
     } catch (err) {
         console.error("加载连接配置失败:", err);
@@ -193,7 +214,9 @@ async function refreshConnection() {
     tables.value = [];
 
     try {
-        const conn = connections.value.find(c => c.name === currentConnection.value);
+        const conn = connections.value.find(
+            (c) => c.name === currentConnection.value,
+        );
         if (!conn) {
             error.value = "找不到连接信息";
             return;
@@ -206,7 +229,7 @@ async function refreshConnection() {
             port: conn.port,
             user: conn.user,
             password: conn.password,
-            database: conn.defaultSchema
+            database: conn.defaultSchema,
         };
 
         if (exportTool.value === "mysql-shell") {
@@ -254,7 +277,7 @@ async function saveConnection() {
         port: newConnection.value.port,
         user: newConnection.value.user,
         password: newConnection.value.password,
-        database: newConnection.value.defaultSchema
+        database: newConnection.value.defaultSchema,
     };
 
     try {
@@ -321,7 +344,9 @@ async function selectDatabase(db) {
     selectedTables.value.clear();
 
     try {
-        const conn = connections.value.find(c => c.name === currentConnection.value);
+        const conn = connections.value.find(
+            (c) => c.name === currentConnection.value,
+        );
         if (conn) {
             const connData = {
                 id: conn.id,
@@ -330,7 +355,7 @@ async function selectDatabase(db) {
                 port: conn.port,
                 user: conn.user,
                 password: conn.password,
-                database: db
+                database: db,
             };
 
             if (exportTool.value === "mysql-shell") {
@@ -389,7 +414,7 @@ async function exportData() {
         // 生成导出结果信息
         const exportResult = generateExportResult();
         showStatus(exportResult);
-        
+
         // 关闭模态框
         showExportModal.value = false;
     } catch (e) {
@@ -402,16 +427,18 @@ async function exportData() {
 // 构建导出命令
 function buildExportCommand() {
     let command = "mysqlsh";
-    
+
     // 添加连接参数
-    const conn = connections.value.find(c => c.name === currentConnection.value);
+    const conn = connections.value.find(
+        (c) => c.name === currentConnection.value,
+    );
     if (conn) {
         command += ` --uri="mysql://${conn.user}:${conn.password}@${conn.host}:${conn.port}/`;
     }
-    
+
     // 添加导出参数
     command += ` --export=json --path="${exportPath.value}"`;
-    
+
     // 添加MySQL Shell参数
     if (mysqlShellParams.value.threads) {
         command += ` --threads=${mysqlShellParams.value.threads}`;
@@ -422,16 +449,16 @@ function buildExportCommand() {
     if (mysqlShellParams.value.skipBinlog) {
         command += " --skip-binlog";
     }
-    
+
     // 添加导出对象
-    if (exportScope.value === 'database') {
-        const databasesList = Array.from(selectedDatabases.value).join(',');
+    if (exportScope.value === "database") {
+        const databasesList = Array.from(selectedDatabases.value).join(",");
         command += ` --databases=${databasesList}`;
-    } else if (exportScope.value === 'table') {
-        const tablesList = Array.from(exportTables.value).join(',');
+    } else if (exportScope.value === "table") {
+        const tablesList = Array.from(exportTables.value).join(",");
         command += ` --database=${exportDatabase.value} --tables=${tablesList}`;
     }
-    
+
     return command;
 }
 
@@ -455,9 +482,9 @@ async function simulateExportProcess() {
 // 生成导出结果信息
 function generateExportResult() {
     let exportType = "";
-    if (exportScope.value === 'database') {
+    if (exportScope.value === "database") {
         exportType = `数据库(${selectedDatabases.value.size}个)`;
-    } else if (exportScope.value === 'table') {
+    } else if (exportScope.value === "table") {
         exportType = `表(${exportTables.value.size}个) from ${exportDatabase.value}`;
     }
     return `成功导出 ${exportType} 到 ${exportPath.value}`;
@@ -488,14 +515,14 @@ function handleExportClick() {
         includeSchemas: "",
         excludeSchemas: "",
         includeTables: "",
-        excludeTables: ""
+        excludeTables: "",
     };
     mysqlDumpParams.value = {
         compression: "gzip",
         singleTransaction: true,
         routines: true,
         events: false,
-        overwrite: true
+        overwrite: true,
     };
     showExportConfigModal.value = true;
 }
@@ -531,7 +558,9 @@ async function loadExportTables() {
     exportTables.value.clear();
 
     try {
-        const conn = connections.value.find(c => c.name === currentConnection.value);
+        const conn = connections.value.find(
+            (c) => c.name === currentConnection.value,
+        );
         if (conn) {
             const connData = {
                 id: conn.id,
@@ -540,7 +569,7 @@ async function loadExportTables() {
                 port: conn.port,
                 user: conn.user,
                 password: conn.password,
-                database: exportDatabase.value
+                database: exportDatabase.value,
             };
 
             if (exportTool.value === "mysql-shell") {
@@ -597,8 +626,10 @@ function toggleSelectAllTables() {
 // 确认导出配置
 async function confirmExportConfig() {
     showExportConfigModal.value = false;
-    
-    const conn = connections.value.find(c => c.name === currentConnection.value);
+
+    const conn = connections.value.find(
+        (c) => c.name === currentConnection.value,
+    );
     if (!conn) {
         error.value = "请先选择数据库连接";
         return;
@@ -610,11 +641,14 @@ async function confirmExportConfig() {
     try {
         const parseCommaSeparated = (str) => {
             if (!str || !str.trim()) return [];
-            return str.split(',').map(s => s.trim()).filter(s => s);
+            return str
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s);
         };
 
         let result;
-        
+
         if (exportTool.value === "mysql-shell") {
             const request = {
                 connection_id: conn.id,
@@ -628,15 +662,23 @@ async function confirmExportConfig() {
                 skip_definer: mysqlShellParams.value.skipDefiner,
                 skip_binlog: mysqlShellParams.value.skipBinlog,
                 overwrite: mysqlShellParams.value.overwrite,
-                include_schemas: parseCommaSeparated(mysqlShellParams.value.includeSchemas),
-                exclude_schemas: parseCommaSeparated(mysqlShellParams.value.excludeSchemas),
-                include_tables: parseCommaSeparated(mysqlShellParams.value.includeTables),
-                exclude_tables: parseCommaSeparated(mysqlShellParams.value.excludeTables),
+                include_schemas: parseCommaSeparated(
+                    mysqlShellParams.value.includeSchemas,
+                ),
+                exclude_schemas: parseCommaSeparated(
+                    mysqlShellParams.value.excludeSchemas,
+                ),
+                include_tables: parseCommaSeparated(
+                    mysqlShellParams.value.includeTables,
+                ),
+                exclude_tables: parseCommaSeparated(
+                    mysqlShellParams.value.excludeTables,
+                ),
             };
 
-            if (exportScope.value === 'database') {
+            if (exportScope.value === "database") {
                 result = await ExportDatabases(request);
-            } else if (exportScope.value === 'table') {
+            } else if (exportScope.value === "table") {
                 result = await ExportTables(request);
             }
         } else {
@@ -653,9 +695,9 @@ async function confirmExportConfig() {
                 overwrite: mysqlDumpParams.value.overwrite,
             };
 
-            if (exportScope.value === 'database') {
+            if (exportScope.value === "database") {
                 result = await ExportDatabasesMySQLDump(mysqldumpRequest);
-            } else if (exportScope.value === 'table') {
+            } else if (exportScope.value === "table") {
                 result = await ExportTablesMySQLDump(mysqldumpRequest);
             }
         }
@@ -707,14 +749,13 @@ function handleImportClick() {
         threads: 4,
         schema: "",
         resetProgress: true,
-        waitTimeout: 0,
         includeSchemas: "",
         excludeSchemas: "",
         includeTables: "",
-        excludeTables: ""
+        excludeTables: "",
     };
     mysqlDumpImportParams.value = {
-        database: ""
+        database: "",
     };
     showImportConfigModal.value = true;
 }
@@ -740,8 +781,10 @@ async function selectImportPath() {
 
 async function confirmImportConfig() {
     showImportConfigModal.value = false;
-    
-    const conn = connections.value.find(c => c.name === currentConnection.value);
+
+    const conn = connections.value.find(
+        (c) => c.name === currentConnection.value,
+    );
     if (!conn) {
         error.value = "请先选择数据库连接";
         return;
@@ -755,7 +798,9 @@ async function confirmImportConfig() {
             const mysqldumpRequest = {
                 connection_id: conn.id,
                 input_file: importPath.value,
-                database: mysqlDumpImportParams.value.database || importDatabase.value,
+                database:
+                    mysqlDumpImportParams.value.database ||
+                    importDatabase.value,
             };
 
             const result = await ImportDumpMySQLDump(mysqldumpRequest);
@@ -771,7 +816,10 @@ async function confirmImportConfig() {
 
         const parseCommaSeparated = (str) => {
             if (!str || !str.trim()) return [];
-            return str.split(',').map(s => s.trim()).filter(s => s);
+            return str
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s);
         };
 
         const request = {
@@ -780,22 +828,33 @@ async function confirmImportConfig() {
             input_dir: importPath.value,
             threads: importParams.value.threads,
             schema: importParams.value.schema,
-            include_schemas: parseCommaSeparated(importParams.value.includeSchemas),
-            exclude_schemas: parseCommaSeparated(importParams.value.excludeSchemas),
-            include_tables: parseCommaSeparated(importParams.value.includeTables),
-            exclude_tables: parseCommaSeparated(importParams.value.excludeTables),
+            include_schemas: parseCommaSeparated(
+                importParams.value.includeSchemas,
+            ),
+            exclude_schemas: parseCommaSeparated(
+                importParams.value.excludeSchemas,
+            ),
+            include_tables: parseCommaSeparated(
+                importParams.value.includeTables,
+            ),
+            exclude_tables: parseCommaSeparated(
+                importParams.value.excludeTables,
+            ),
             reset_progress: importParams.value.resetProgress,
-            wait_timeout: importParams.value.waitTimeout,
         };
 
         pendingImportRequest.value = request;
 
         const conflictResult = await CheckImportConflicts({
             connection_id: conn.id,
-            input_dir: importPath.value
+            input_dir: importPath.value,
         });
 
-        if (conflictResult.has_conflicts && conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+        if (
+            conflictResult.has_conflicts &&
+            conflictResult.conflicts &&
+            conflictResult.conflicts.length > 0
+        ) {
             importConflicts.value = conflictResult.conflicts;
             showConflictModal.value = true;
             isImporting.value = false;
@@ -829,9 +888,9 @@ async function executeImport(request) {
 
     try {
         let result;
-        if (importScope.value === 'database') {
+        if (importScope.value === "database") {
             result = await ImportDatabases(request);
-        } else if (importScope.value === 'table') {
+        } else if (importScope.value === "table") {
             result = await ImportTables(request);
         }
 
@@ -864,7 +923,9 @@ async function handleConflictResolution(deleteConflicts) {
         return;
     }
 
-    const conn = connections.value.find(c => c.name === currentConnection.value);
+    const conn = connections.value.find(
+        (c) => c.name === currentConnection.value,
+    );
     if (!conn) {
         error.value = "请先选择数据库连接";
         isImporting.value = false;
@@ -874,10 +935,10 @@ async function handleConflictResolution(deleteConflicts) {
     try {
         await DropConflictingTables({
             connection_id: conn.id,
-            conflicts: importConflicts.value
+            conflicts: importConflicts.value,
         });
         showStatus("已删除冲突表，正在导入...");
-        
+
         if (pendingImportRequest.value) {
             await executeImport(pendingImportRequest.value);
         }
@@ -938,7 +999,9 @@ async function loadExportSettings() {
             exportTables.value = new Set(settings.last_tables);
         }
         if (settings.last_connection_id) {
-            const conn = connections.value.find(c => c.id === settings.last_connection_id);
+            const conn = connections.value.find(
+                (c) => c.id === settings.last_connection_id,
+            );
             if (conn) {
                 currentConnection.value = conn.name;
             }
@@ -982,10 +1045,12 @@ function loadFromLocalStorage() {
                 mysqlShellParams.value.overwrite = settings.overwrite;
             }
             if (settings.include_schemas) {
-                mysqlShellParams.value.includeSchemas = settings.include_schemas;
+                mysqlShellParams.value.includeSchemas =
+                    settings.include_schemas;
             }
             if (settings.exclude_schemas) {
-                mysqlShellParams.value.excludeSchemas = settings.exclude_schemas;
+                mysqlShellParams.value.excludeSchemas =
+                    settings.exclude_schemas;
             }
             if (settings.include_tables) {
                 mysqlShellParams.value.includeTables = settings.include_tables;
@@ -1021,22 +1086,25 @@ function saveToLocalStorage(settings) {
 
 function validateExportSettings(settings) {
     const errors = [];
-    
+
     if (settings.threads < 1 || settings.threads > 32) {
         errors.push("线程数必须在1-32之间");
     }
-    
+
     if (settings.chunk_size) {
         const chunkSizePattern = /^\d+[KMG]?$/i;
         if (!chunkSizePattern.test(settings.chunk_size)) {
             errors.push("分块大小格式无效，例如: 64, 64K, 64M, 64G");
         }
     }
-    
-    if (settings.export_scope === "database" && settings.last_databases.length === 0) {
+
+    if (
+        settings.export_scope === "database" &&
+        settings.last_databases.length === 0
+    ) {
         errors.push("请至少选择一个数据库");
     }
-    
+
     if (settings.export_scope === "table") {
         if (!settings.last_database) {
             errors.push("请选择数据库");
@@ -1045,12 +1113,14 @@ function validateExportSettings(settings) {
             errors.push("请至少选择一个表");
         }
     }
-    
+
     return errors;
 }
 
 async function saveExportSettings() {
-    const conn = connections.value.find(c => c.name === currentConnection.value);
+    const conn = connections.value.find(
+        (c) => c.name === currentConnection.value,
+    );
     const settings = {
         export_tool: exportTool.value,
         export_path: exportPath.value,
@@ -1070,22 +1140,25 @@ async function saveExportSettings() {
         exclude_tables: mysqlShellParams.value.excludeTables,
         export_scope: exportScope.value,
     };
-    
+
     const errors = validateExportSettings(settings);
-    if (errors.length > 0 && (settings.last_databases.length > 0 || settings.last_tables.length > 0)) {
+    if (
+        errors.length > 0 &&
+        (settings.last_databases.length > 0 || settings.last_tables.length > 0)
+    ) {
         console.warn("配置验证警告:", errors);
     }
-    
+
     saveToLocalStorage(settings);
-    
+
     configSaveStatus.value = "saving";
     configSaveMessage.value = "保存中...";
-    
+
     try {
         await SaveExportSettings(settings);
         configSaveStatus.value = "saved";
         configSaveMessage.value = "配置已保存";
-        
+
         if (configSaveTimeout) {
             clearTimeout(configSaveTimeout);
         }
@@ -1097,7 +1170,7 @@ async function saveExportSettings() {
         console.error("保存导出配置失败:", err);
         configSaveStatus.value = "error";
         configSaveMessage.value = "保存失败，已备份到本地";
-        
+
         if (configSaveTimeout) {
             clearTimeout(configSaveTimeout);
         }
@@ -1134,21 +1207,33 @@ watch(exportScope, () => {
     debouncedSaveExportSettings();
 });
 
-watch(selectedDatabases, () => {
-    debouncedSaveExportSettings();
-}, { deep: true });
+watch(
+    selectedDatabases,
+    () => {
+        debouncedSaveExportSettings();
+    },
+    { deep: true },
+);
 
 watch(exportDatabase, () => {
     debouncedSaveExportSettings();
 });
 
-watch(exportTables, () => {
-    debouncedSaveExportSettings();
-}, { deep: true });
+watch(
+    exportTables,
+    () => {
+        debouncedSaveExportSettings();
+    },
+    { deep: true },
+);
 
-watch(mysqlShellParams, () => {
-    debouncedSaveExportSettings();
-}, { deep: true });
+watch(
+    mysqlShellParams,
+    () => {
+        debouncedSaveExportSettings();
+    },
+    { deep: true },
+);
 </script>
 
 <template>
@@ -1164,11 +1249,15 @@ watch(mysqlShellParams, () => {
                 <span class="stat-item">{{ connections.length }} 连接</span>
                 <span class="stat-divider">|</span>
                 <span class="stat-item"
-                    >{{ selectedDatabase || '未选择' }} 数据库</span
+                    >{{ selectedDatabase || "未选择" }} 数据库</span
                 >
                 <span class="stat-divider">|</span>
                 <span class="stat-item">{{ selectedTables.size }} 已选表</span>
-                <span v-if="configSaveStatus !== 'idle'" class="config-save-status" :class="configSaveStatus">
+                <span
+                    v-if="configSaveStatus !== 'idle'"
+                    class="config-save-status"
+                    :class="configSaveStatus"
+                >
                     {{ configSaveMessage }}
                 </span>
             </div>
@@ -1462,11 +1551,19 @@ watch(mysqlShellParams, () => {
                         <label>导出范围:</label>
                         <div class="radio-group">
                             <label class="radio-item">
-                                <input type="radio" value="database" v-model="exportScope" />
+                                <input
+                                    type="radio"
+                                    value="database"
+                                    v-model="exportScope"
+                                />
                                 <span>数据库</span>
                             </label>
                             <label class="radio-item">
-                                <input type="radio" value="table" v-model="exportScope" />
+                                <input
+                                    type="radio"
+                                    value="table"
+                                    v-model="exportScope"
+                                />
                                 <span>数据表</span>
                             </label>
                         </div>
@@ -1476,12 +1573,22 @@ watch(mysqlShellParams, () => {
                     <div v-if="exportScope === 'database'" class="form-group">
                         <div class="section-header">
                             <h4>选择数据库</h4>
-                            <button @click="toggleSelectAllDatabases" class="btn small">
-                                {{ selectedDatabases.size === databases.length ? '取消全选' : '全选' }}
+                            <button
+                                @click="toggleSelectAllDatabases"
+                                class="btn small"
+                            >
+                                {{
+                                    selectedDatabases.size === databases.length
+                                        ? "取消全选"
+                                        : "全选"
+                                }}
                             </button>
                         </div>
                         <div class="db-select-list">
-                            <div v-if="databases.length === 0" class="empty-state">
+                            <div
+                                v-if="databases.length === 0"
+                                class="empty-state"
+                            >
                                 请先选择连接并刷新数据库列表
                             </div>
                             <div
@@ -1506,9 +1613,19 @@ watch(mysqlShellParams, () => {
                         <!-- 数据库选择 -->
                         <div class="form-group">
                             <label>选择数据库:</label>
-                            <select v-model="exportDatabase" class="select-input" @change="loadExportTables">
+                            <select
+                                v-model="exportDatabase"
+                                class="select-input"
+                                @change="loadExportTables"
+                            >
                                 <option value="">请选择数据库</option>
-                                <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+                                <option
+                                    v-for="db in databases"
+                                    :key="db"
+                                    :value="db"
+                                >
+                                    {{ db }}
+                                </option>
                             </select>
                         </div>
 
@@ -1516,29 +1633,43 @@ watch(mysqlShellParams, () => {
                         <div class="form-group">
                             <div class="section-header">
                                 <h4>选择数据表</h4>
-                                <button 
-                                    @click="toggleSelectAllTables" 
+                                <button
+                                    @click="toggleSelectAllTables"
                                     class="btn small"
-                                    :disabled="!exportDatabase || tables.length === 0"
+                                    :disabled="
+                                        !exportDatabase || tables.length === 0
+                                    "
                                 >
-                                    {{ exportTables.size === tables.length ? '取消全选' : '全选' }}
+                                    {{
+                                        exportTables.size === tables.length
+                                            ? "取消全选"
+                                            : "全选"
+                                    }}
                                 </button>
                             </div>
                             <div class="table-select-list">
                                 <div v-if="!exportDatabase" class="empty-state">
                                     请先选择数据库
                                 </div>
-                                <div v-else-if="isLoadingTables" class="empty-state">
+                                <div
+                                    v-else-if="isLoadingTables"
+                                    class="empty-state"
+                                >
                                     加载表列表中...
                                 </div>
-                                <div v-else-if="tables.length === 0" class="empty-state">
+                                <div
+                                    v-else-if="tables.length === 0"
+                                    class="empty-state"
+                                >
                                     该数据库中没有表
                                 </div>
                                 <div
                                     v-for="table in tables"
                                     :key="table"
                                     class="table-select-item"
-                                    :class="{ selected: exportTables.has(table) }"
+                                    :class="{
+                                        selected: exportTables.has(table),
+                                    }"
                                     @click="toggleTableSelection(table)"
                                 >
                                     <input
@@ -1568,7 +1699,10 @@ watch(mysqlShellParams, () => {
                             </div>
                             <div class="param-item">
                                 <label>压缩方式:</label>
-                                <select v-model="mysqlShellParams.compression" class="select-input small">
+                                <select
+                                    v-model="mysqlShellParams.compression"
+                                    class="select-input small"
+                                >
                                     <option value="gzip">gzip (推荐)</option>
                                     <option value="zstd">zstd (更快)</option>
                                     <option value="none">无压缩</option>
@@ -1585,19 +1719,28 @@ watch(mysqlShellParams, () => {
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlShellParams.skipDefiner" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlShellParams.skipDefiner"
+                                    />
                                     跳过 Definer
                                 </label>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlShellParams.skipBinlog" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlShellParams.skipBinlog"
+                                    />
                                     跳过 Binlog
                                 </label>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlShellParams.overwrite" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlShellParams.overwrite"
+                                    />
                                     覆盖已存在目录
                                 </label>
                             </div>
@@ -1610,32 +1753,49 @@ watch(mysqlShellParams, () => {
                         <div class="param-group">
                             <div class="param-item">
                                 <label>压缩方式:</label>
-                                <select v-model="mysqlDumpParams.compression" class="select-input small">
+                                <select
+                                    v-model="mysqlDumpParams.compression"
+                                    class="select-input small"
+                                >
                                     <option value="gzip">gzip (推荐)</option>
                                     <option value="none">无压缩</option>
                                 </select>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlDumpParams.singleTransaction" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="
+                                            mysqlDumpParams.singleTransaction
+                                        "
+                                    />
                                     单事务 (InnoDB安全)
                                 </label>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlDumpParams.routines" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlDumpParams.routines"
+                                    />
                                     包含存储过程
                                 </label>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlDumpParams.events" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlDumpParams.events"
+                                    />
                                     包含事件
                                 </label>
                             </div>
                             <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="mysqlDumpParams.overwrite" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="mysqlDumpParams.overwrite"
+                                    />
                                     覆盖已存在文件
                                 </label>
                             </div>
@@ -1689,7 +1849,7 @@ watch(mysqlShellParams, () => {
                     <button @click="showExportConfigModal = false" class="btn">
                         取消
                     </button>
-                    <button 
+                    <button
                         @click="confirmExportConfig"
                         class="btn danger"
                         :disabled="!canConfirmExport"
@@ -1713,14 +1873,22 @@ watch(mysqlShellParams, () => {
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>导入{{ exportTool === 'mysqldump' ? '文件' : '目录' }}:</label>
+                        <label
+                            >导入{{
+                                exportTool === "mysqldump" ? "文件" : "目录"
+                            }}:</label
+                        >
                         <div class="path-selector">
                             <input
                                 v-model="importPath"
                                 type="text"
                                 class="form-input"
                                 readonly
-                                :placeholder="exportTool === 'mysqldump' ? '选择SQL文件' : '选择包含导出文件的目录'"
+                                :placeholder="
+                                    exportTool === 'mysqldump'
+                                        ? '选择SQL文件'
+                                        : '选择包含导出文件的目录'
+                                "
                             />
                             <button @click="selectImportPath" class="btn">
                                 选择
@@ -1732,21 +1900,41 @@ watch(mysqlShellParams, () => {
                         <label>导入范围:</label>
                         <div class="radio-group">
                             <label class="radio-item">
-                                <input type="radio" value="database" v-model="importScope" />
+                                <input
+                                    type="radio"
+                                    value="database"
+                                    v-model="importScope"
+                                />
                                 <span>数据库</span>
                             </label>
                             <label class="radio-item">
-                                <input type="radio" value="table" v-model="importScope" />
+                                <input
+                                    type="radio"
+                                    value="table"
+                                    v-model="importScope"
+                                />
                                 <span>数据表</span>
                             </label>
                         </div>
                     </div>
 
-                    <div v-if="exportTool === 'mysql-shell' && importScope === 'table'" class="form-group">
+                    <div
+                        v-if="
+                            exportTool === 'mysql-shell' &&
+                            importScope === 'table'
+                        "
+                        class="form-group"
+                    >
                         <label>目标数据库:</label>
                         <select v-model="importDatabase" class="select-input">
                             <option value="">请选择数据库</option>
-                            <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+                            <option
+                                v-for="db in databases"
+                                :key="db"
+                                :value="db"
+                            >
+                                {{ db }}
+                            </option>
                         </select>
                     </div>
 
@@ -1785,18 +1973,11 @@ watch(mysqlShellParams, () => {
                                 />
                             </div>
                             <div class="param-item">
-                                <label>等待超时 (秒):</label>
-                                <input
-                                    v-model.number="importParams.waitTimeout"
-                                    type="number"
-                                    min="0"
-                                    class="form-input small"
-                                    placeholder="0为默认"
-                                />
-                            </div>
-                            <div class="param-item">
                                 <label>
-                                    <input type="checkbox" v-model="importParams.resetProgress" />
+                                    <input
+                                        type="checkbox"
+                                        v-model="importParams.resetProgress"
+                                    />
                                     重置进度
                                 </label>
                             </div>
@@ -1849,7 +2030,7 @@ watch(mysqlShellParams, () => {
                     <button @click="showImportConfigModal = false" class="btn">
                         取消
                     </button>
-                    <button 
+                    <button
                         @click="confirmImportConfig"
                         class="btn primary"
                         :disabled="!canConfirmImport || isImporting"
@@ -1872,35 +2053,74 @@ watch(mysqlShellParams, () => {
                     检测到冲突
                 </div>
                 <div class="modal-body">
-                    <p class="conflict-warning">以下数据库对象已存在，导入将会失败：</p>
+                    <p class="conflict-warning">
+                        以下数据库对象已存在，导入将会失败：
+                    </p>
                     <div class="conflict-list">
-                        <div v-for="conflict in importConflicts" :key="conflict.schema" class="conflict-item">
-                            <h4 class="conflict-schema">数据库: {{ conflict.schema }}</h4>
-                            <div v-if="conflict.tables && conflict.tables.length > 0" class="conflict-section">
-                                <span class="conflict-label">表 ({{ conflict.tables.length }}):</span>
+                        <div
+                            v-for="conflict in importConflicts"
+                            :key="conflict.schema"
+                            class="conflict-item"
+                        >
+                            <h4 class="conflict-schema">
+                                数据库: {{ conflict.schema }}
+                            </h4>
+                            <div
+                                v-if="
+                                    conflict.tables &&
+                                    conflict.tables.length > 0
+                                "
+                                class="conflict-section"
+                            >
+                                <span class="conflict-label"
+                                    >表 ({{ conflict.tables.length }}):</span
+                                >
                                 <div class="conflict-tags">
-                                    <span v-for="table in conflict.tables" :key="table" class="conflict-tag">
+                                    <span
+                                        v-for="table in conflict.tables"
+                                        :key="table"
+                                        class="conflict-tag"
+                                    >
                                         {{ table }}
                                     </span>
                                 </div>
                             </div>
-                            <div v-if="conflict.views && conflict.views.length > 0" class="conflict-section">
-                                <span class="conflict-label">视图 ({{ conflict.views.length }}):</span>
+                            <div
+                                v-if="
+                                    conflict.views && conflict.views.length > 0
+                                "
+                                class="conflict-section"
+                            >
+                                <span class="conflict-label"
+                                    >视图 ({{ conflict.views.length }}):</span
+                                >
                                 <div class="conflict-tags">
-                                    <span v-for="view in conflict.views" :key="view" class="conflict-tag">
+                                    <span
+                                        v-for="view in conflict.views"
+                                        :key="view"
+                                        class="conflict-tag"
+                                    >
                                         {{ view }}
                                     </span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <p class="conflict-question">是否删除这些冲突对象后继续导入？</p>
+                    <p class="conflict-question">
+                        是否删除这些冲突对象后继续导入？
+                    </p>
                 </div>
                 <div class="modal-foot">
-                    <button @click="handleConflictResolution(false)" class="btn">
+                    <button
+                        @click="handleConflictResolution(false)"
+                        class="btn"
+                    >
                         取消导入
                     </button>
-                    <button @click="handleConflictResolution(true)" class="btn danger">
+                    <button
+                        @click="handleConflictResolution(true)"
+                        class="btn danger"
+                    >
                         删除并继续导入
                     </button>
                 </div>
