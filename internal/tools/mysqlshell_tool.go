@@ -559,15 +559,26 @@ func (m *MySQLShellTool) enableLocalInfile(conn DatabaseConnection) error {
 	log.Info("Enabling local_infile on server", "host", conn.Host, "port", conn.Port)
 
 	uri := m.common.BuildDatabaseURI(conn, false)
-	args := []string{
+
+	globalArgs := []string{
 		"--uri", uri,
 		"--sql", "--execute", "SET GLOBAL local_infile = ON;",
 	}
 
-	output, err := m.common.ExecuteCommand("mysqlsh", args...)
+	output, err := m.common.ExecuteCommand("mysqlsh", globalArgs...)
 	if err != nil {
-		log.Error("Error enabling local_infile", "error", err, "output", output)
-		return fmt.Errorf("启用 local_infile 失败: %s, 错误信息: %s", err.Error(), output)
+		log.Warn("Failed to set GLOBAL local_infile, trying SESSION", "error", err, "output", output)
+	}
+
+	sessionArgs := []string{
+		"--uri", uri,
+		"--sql", "--execute", "SET SESSION local_infile = ON;",
+	}
+
+	sessionOutput, sessionErr := m.common.ExecuteCommand("mysqlsh", sessionArgs...)
+	if sessionErr != nil {
+		log.Error("Error enabling local_infile", "error", sessionErr, "output", sessionOutput)
+		return fmt.Errorf("启用 local_infile 失败: %s, 错误信息: %s", sessionErr.Error(), sessionOutput)
 	}
 
 	log.Info("Enabled local_infile successfully", "host", conn.Host, "port", conn.Port)
@@ -595,6 +606,10 @@ func (m *MySQLShellTool) ImportDatabases(conn DatabaseConnection, config ImportC
 
 	log.Info("Importing databases", "input", config.InputDir, "threads", config.Threads)
 
+	if err := m.enableLocalInfile(conn); err != nil {
+		log.Warn("Failed to enable local_infile, continuing anyway", "error", err)
+	}
+
 	options := m.buildImportOptions(config)
 	optionsJSON, _ := json.Marshal(options)
 
@@ -606,22 +621,8 @@ func (m *MySQLShellTool) ImportDatabases(conn DatabaseConnection, config ImportC
 
 	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		if strings.Contains(output, "local_infile disabled in server") || strings.Contains(output, "local_infile' global system variable must be set to ON") {
-			log.Info("Detected local_infile disabled, attempting to enable it", "host", conn.Host, "port", conn.Port)
-			if enableErr := m.enableLocalInfile(conn); enableErr != nil {
-				log.Error("Failed to enable local_infile", "error", enableErr)
-				return fmt.Errorf("导入数据库失败: 服务器 local_infile 已禁用，尝试启用失败: %s", enableErr.Error())
-			}
-			log.Info("Retrying import after enabling local_infile", "input", config.InputDir)
-			output, err = m.common.ExecuteCommand("mysqlsh", args...)
-			if err != nil {
-				log.Error("Error importing databases after enabling local_infile", "input", config.InputDir, "error", err, "output", output)
-				return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), output)
-			}
-		} else {
-			log.Error("Error importing databases", "input", config.InputDir, "error", err, "output", output)
-			return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), output)
-		}
+		log.Error("Error importing databases", "input", config.InputDir, "error", err, "output", output)
+		return fmt.Errorf("导入数据库失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Imported databases successfully", "input", config.InputDir)
@@ -688,6 +689,10 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 
 	log.Info("Importing tables", "database", database, "input", config.InputDir, "threads", config.Threads)
 
+	if err := m.enableLocalInfile(conn); err != nil {
+		log.Warn("Failed to enable local_infile, continuing anyway", "error", err)
+	}
+
 	options := map[string]any{}
 
 	if config.Threads > 0 {
@@ -718,22 +723,8 @@ func (m *MySQLShellTool) ImportTables(conn DatabaseConnection, database string, 
 
 	output, err := m.common.ExecuteCommand("mysqlsh", args...)
 	if err != nil {
-		if strings.Contains(output, "local_infile disabled in server") || strings.Contains(output, "local_infile' global system variable must be set to ON") {
-			log.Info("Detected local_infile disabled, attempting to enable it", "host", conn.Host, "port", conn.Port)
-			if enableErr := m.enableLocalInfile(conn); enableErr != nil {
-				log.Error("Failed to enable local_infile", "error", enableErr)
-				return fmt.Errorf("导入表失败: 服务器 local_infile 已禁用，尝试启用失败: %s", enableErr.Error())
-			}
-			log.Info("Retrying import after enabling local_infile", "database", database, "input", config.InputDir)
-			output, err = m.common.ExecuteCommand("mysqlsh", args...)
-			if err != nil {
-				log.Error("Error importing tables after enabling local_infile", "database", database, "input", config.InputDir, "error", err, "output", output)
-				return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), output)
-			}
-		} else {
-			log.Error("Error importing tables", "database", database, "input", config.InputDir, "error", err, "output", output)
-			return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), output)
-		}
+		log.Error("Error importing tables", "database", database, "input", config.InputDir, "error", err, "output", output)
+		return fmt.Errorf("导入表失败: %s, 错误信息: %s", err.Error(), output)
 	}
 
 	log.Info("Imported tables successfully", "database", database, "input", config.InputDir)

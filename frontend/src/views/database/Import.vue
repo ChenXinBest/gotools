@@ -266,7 +266,7 @@ async function dropConflicts() {
   if (!connection) return
 
   try {
-    await dropConflictingTables(connection, conflicts)
+    await dropConflictingTables(connection.id, conflicts.value)
     alert('冲突对象已删除')
   } catch (err) {
     importError.value = err.message || '删除冲突对象失败'

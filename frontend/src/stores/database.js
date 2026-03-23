@@ -401,15 +401,18 @@ export const useDatabaseStore = defineStore("database", () => {
     }
   }
 
-  async function dropConflictingTables(connection, conflicts) {
+  async function dropConflictingTables(connectionId, conflicts) {
     try {
-      // 使用 toRaw 获取原始对象，避免 Vue 响应式对象的循环引用问题
-      const rawConnection = toRaw(connection);
-      const rawConflicts = toRaw(conflicts);
-
       const request = {
-        connection_id: rawConnection.id,
-        conflicts: rawConflicts,
+        connection_id: connectionId,
+        conflicts: conflicts.map(c => ({
+          schema: c.schema,
+          tables: Array.from(c.tables || []),
+          views: Array.from(c.views || []),
+          events: Array.from(c.events || []),
+          functions: Array.from(c.functions || []),
+          procedures: Array.from(c.procedures || []),
+        })),
       };
 
       await DropConflictingTables(request);
