@@ -18,7 +18,7 @@ GoTools是一个基于Go语言和Wails框架开发的工具集合，旨在汇总
 
 - **后端**：Go 1.26+
 - **前端**：Vue 3 + Vite
-- **框架**：Wails v2.11.0
+- **框架**：Wails v2.12.0
 - **依赖库**：
   - `github.com/shirou/gopsutil/v3` - 系统进程信息获取
   - `vue-icons-plus/fa` - Font Awesome 图标库
@@ -29,7 +29,7 @@ GoTools是一个基于Go语言和Wails框架开发的工具集合，旨在汇总
 
 - **Go 1.26+**（本项目使用Go 1.26最新语法特性）
 - Node.js 16+
-- Wails CLI v2.11.0+
+- Wails CLI v2.12.0+
 
 ### Windows环境配置说明
 
@@ -80,19 +80,29 @@ wails build
 
 ```
 gotools/
-├── app.go              # 应用入口
-├── frontend/           # 前端代码
-│   ├── src/            # 源代码
-│   │   ├── components/ # 组件
-│   │   └── wailsjs/    # Wails生成的绑定
-│   └── package.json    # 前端依赖
-├── internal/           # 内部包
-│   ├── config/         # 配置管理
-│   ├── log/            # 日志系统
-│   └── tools/          # 工具实现
-├── main.go             # 主入口
-├── go.mod              # Go模块文件
-└── wails.json          # Wails配置
+├── app.go                    # Wails应用入口
+├── main.go                   # 程序入口
+├── wails.json                # Wails配置
+├── go.mod                    # Go模块文件
+├── build/                    # 构建脚本
+├── frontend/                 # 前端代码
+│   ├── src/                  # 源代码
+│   │   ├── components/       # Vue组件
+│   │   ├── views/            # 页面视图
+│   │   ├── stores/           # Pinia状态管理
+│   │   ├── router/           # Vue Router
+│   │   ├── wailsjs/          # Wails生成的绑定
+│   │   └── style.css         # 全局样式
+│   └── package.json          # 前端依赖
+├── internal/                 # 内部包
+│   ├── config/               # 配置管理
+│   ├── log/                  # 日志系统
+│   ├── services/             # 业务服务层
+│   ├── tools/                # 工具实现
+│   └── version/              # 版本信息
+├── test/                     # 测试文件
+│   └── tools/                # 工具测试
+└── openspec/                 # 变更提案和规格文档
 ```
 
 ## 功能说明

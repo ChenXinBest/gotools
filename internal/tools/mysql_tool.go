@@ -10,6 +10,7 @@ import (
 // DatabaseConnection 与 config 包中的结构保持一致
 type DatabaseConnection = config.DatabaseConnection
 
+// ExportSettings 导出设置结构，与 config 包中的结构保持一致
 type ExportSettings = config.ExportSettings
 
 // GetDatabaseConnections 获取所有数据库连接信息
@@ -155,6 +156,7 @@ func generateID() string {
 	return time.Now().Format("20060102150405")
 }
 
+// GetExportSettings 获取导出设置
 func GetExportSettings() (ExportSettings, error) {
 	log.Info("Loading export settings from config")
 	cfg, err := config.LoadConfig()
@@ -166,6 +168,7 @@ func GetExportSettings() (ExportSettings, error) {
 	return cfg.ExportSettings, nil
 }
 
+// SaveExportSettings 保存导出设置
 func SaveExportSettings(settings ExportSettings) error {
 	log.Info("Saving export settings", "export_tool", settings.ExportTool, "export_path", settings.ExportPath)
 	cfg, err := config.LoadConfig()

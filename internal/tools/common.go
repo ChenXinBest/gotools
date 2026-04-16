@@ -23,18 +23,43 @@ func NewCommonTool() *CommonTool {
 
 // ExecuteCommand 执行命令并返回输出，统一错误处理
 func (c *CommonTool) ExecuteCommand(name string, args ...string) (string, error) {
-	log.Info("Executing command", "command", name, "args", args)
+	log.Info("Executing command", "command", name, "args", c.maskSensitiveArgs(args))
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
 		outputStr := string(output)
-		log.Error("Command execution failed", "command", name, "args", args, "error", err, "output", outputStr)
+		log.Error("Command execution failed", "command", name, "args", c.maskSensitiveArgs(args), "error", err, "output", outputStr)
 		return "", fmt.Errorf("命令执行失败: %s, 错误信息: %s", err.Error(), outputStr)
 	}
 
 	log.Info("Command executed successfully", "command", name)
 	return string(output), nil
+}
+
+// maskSensitiveArgs 屏蔽命令行中的敏感参数（密码）
+func (c *CommonTool) maskSensitiveArgs(args []string) []string {
+	masked := make([]string, len(args))
+	for i, arg := range args {
+		// 屏蔽 -p 后面的密码参数
+		if arg == "-p" && i+1 < len(args) {
+			masked[i] = "-p***"
+			continue
+		}
+		// 屏蔽 --password= 后面的密码
+		if strings.HasPrefix(arg, "--password=") {
+			masked[i] = "--password=***"
+			continue
+		}
+		// 屏蔽 URI 中的密码 (user:password@host:port)
+		if strings.Contains(arg, "@") && strings.Contains(arg, ":") {
+			// 这可能是包含密码的URI
+			masked[i] = "***"
+			continue
+		}
+		masked[i] = arg
+	}
+	return masked
 }
 
 // ExecuteCommandWithStdin 执行命令并提供标准输入

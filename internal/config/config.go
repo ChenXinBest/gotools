@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 )
 
+// DatabaseConnection 数据库连接配置
 type DatabaseConnection struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -16,6 +17,7 @@ type DatabaseConnection struct {
 	Database string `json:"database"`
 }
 
+// MySQLShellConfig MySQL Shell 导出配置
 type MySQLShellConfig struct {
 	Threads     int    `json:"threads"`
 	Compression string `json:"compression"`
@@ -25,6 +27,7 @@ type MySQLShellConfig struct {
 	Overwrite   bool   `json:"overwrite"`
 }
 
+// MySQLDumpConfig mysqldump 导出配置
 type MySQLDumpConfig struct {
 	Compression       string `json:"compression"`
 	SingleTransaction bool   `json:"single_transaction"`
@@ -33,6 +36,7 @@ type MySQLDumpConfig struct {
 	Overwrite         bool   `json:"overwrite"`
 }
 
+// ExportSettings 导出设置
 type ExportSettings struct {
 	ExportTool       string           `json:"export_tool"`
 	ExportPath       string           `json:"export_path"`
@@ -44,16 +48,19 @@ type ExportSettings struct {
 	MySQLDump        MySQLDumpConfig  `json:"mysql_dump"`
 }
 
+// Config 应用配置结构
 type Config struct {
 	DatabaseConnections []DatabaseConnection `json:"database_connections"`
 	ExportSettings      ExportSettings       `json:"export_settings"`
 }
 
+// GetConfigPath 获取配置文件路径
 func GetConfigPath() string {
 	execDir, _ := os.Executable()
 	return filepath.Join(filepath.Dir(execDir), "config.json")
 }
 
+// LoadConfig 加载配置文件
 func LoadConfig() (*Config, error) {
 	configPath := GetConfigPath()
 
@@ -121,6 +128,7 @@ func LoadConfig() (*Config, error) {
 	return &config, nil
 }
 
+// SaveConfig 保存配置到文件
 func SaveConfig(config *Config) error {
 	configPath := GetConfigPath()
 

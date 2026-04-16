@@ -48,6 +48,14 @@ const (
 	MySQLShellDownloadURL = "https://dev.mysql.com/downloads/shell/"
 )
 
+// escapeMySQLIdentifier 转义 MySQL 标识符（数据库名、表名、列名等）
+// 使用反引号包裹并转义内部反引号
+func escapeMySQLIdentifier(identifier string) string {
+	// 先将内部的反引号替换为两个反引号
+	escaped := strings.ReplaceAll(identifier, "`", "``")
+	return "`" + escaped + "`"
+}
+
 type MySQLShellTool struct {
 	common *CommonTool
 }
@@ -824,10 +832,10 @@ func (m *MySQLShellTool) getExistingTables(conn DatabaseConnection, schema strin
 
 	tableList := make([]string, len(tables))
 	for i, t := range tables {
-		tableList[i] = fmt.Sprintf("'%s'", t)
+		tableList[i] = escapeMySQLIdentifier(t)
 	}
 
-	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN (%s) AND TABLE_TYPE = 'BASE TABLE'", schema, strings.Join(tableList, ","))
+	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN (%s) AND TABLE_TYPE = 'BASE TABLE'", escapeMySQLIdentifier(schema), strings.Join(tableList, ","))
 
 	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
@@ -852,10 +860,10 @@ func (m *MySQLShellTool) getExistingViews(conn DatabaseConnection, schema string
 
 	viewList := make([]string, len(views))
 	for i, v := range views {
-		viewList[i] = fmt.Sprintf("'%s'", v)
+		viewList[i] = escapeMySQLIdentifier(v)
 	}
 
-	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.VIEWS WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN (%s)", schema, strings.Join(viewList, ","))
+	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.VIEWS WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN (%s)", escapeMySQLIdentifier(schema), strings.Join(viewList, ","))
 
 	uri := m.common.BuildDatabaseURI(conn, false)
 	args := []string{
@@ -897,24 +905,26 @@ func (m *MySQLShellTool) DropObjects(conn DatabaseConnection, conflicts []Import
 	for _, conflict := range conflicts {
 		var dropStatements []string
 
+		schemaIdentifier := escapeMySQLIdentifier(conflict.Schema)
+
 		for _, table := range conflict.Tables {
-			dropStatements = append(dropStatements, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`;", conflict.Schema, table))
+			dropStatements = append(dropStatements, fmt.Sprintf("DROP TABLE IF EXISTS %s.%s;", schemaIdentifier, escapeMySQLIdentifier(table)))
 		}
 
 		for _, view := range conflict.Views {
-			dropStatements = append(dropStatements, fmt.Sprintf("DROP VIEW IF EXISTS `%s`.`%s`;", conflict.Schema, view))
+			dropStatements = append(dropStatements, fmt.Sprintf("DROP VIEW IF EXISTS %s.%s;", schemaIdentifier, escapeMySQLIdentifier(view)))
 		}
 
 		for _, event := range conflict.Events {
-			dropStatements = append(dropStatements, fmt.Sprintf("DROP EVENT IF EXISTS `%s`.`%s`;", conflict.Schema, event))
+			dropStatements = append(dropStatements, fmt.Sprintf("DROP EVENT IF EXISTS %s.%s;", schemaIdentifier, escapeMySQLIdentifier(event)))
 		}
 
 		for _, fn := range conflict.Functions {
-			dropStatements = append(dropStatements, fmt.Sprintf("DROP FUNCTION IF EXISTS `%s`.`%s`;", conflict.Schema, fn))
+			dropStatements = append(dropStatements, fmt.Sprintf("DROP FUNCTION IF EXISTS %s.%s;", schemaIdentifier, escapeMySQLIdentifier(fn)))
 		}
 
 		for _, proc := range conflict.Procedures {
-			dropStatements = append(dropStatements, fmt.Sprintf("DROP PROCEDURE IF EXISTS `%s`.`%s`;", conflict.Schema, proc))
+			dropStatements = append(dropStatements, fmt.Sprintf("DROP PROCEDURE IF EXISTS %s.%s;", schemaIdentifier, escapeMySQLIdentifier(proc)))
 		}
 
 		if len(dropStatements) == 0 {
