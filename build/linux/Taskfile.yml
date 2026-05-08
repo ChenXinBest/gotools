@@ -1,0 +1,36 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the application for Linux
+    cmds:
+      - task: build:native
+        vars:
+          DEV: '{{.DEV}}'
+
+  build:native:
+    summary: Builds using native Go compilation
+    internal: true
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          DEV: '{{.DEV}}'
+    cmds:
+      - go build -o "{{.BIN_DIR}}/{{.APP_NAME}}"
+    env:
+      GOOS: linux
+      CGO_ENABLED: '0'
+      GOARCH: '{{.ARCH | default "amd64"}}'
+
+  package:
+    summary: Packages the application
+    cmds:
+      - task: build
+
+  run:
+    cmds:
+      - './{{.BIN_DIR}}/{{.APP_NAME}}'

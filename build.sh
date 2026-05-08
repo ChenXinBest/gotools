@@ -64,8 +64,8 @@ for target in "${targets[@]}"; do
     fi
     
     # 使用wails构建
-    if command -v wails &> /dev/null; then
-        wails build -o "$output" -ldflags "$LDFLAGS"
+    if command -v wails3 &> /dev/null; then
+        wails3 build -ldflags "$LDFLAGS"
     else
         # 如果没有wails，使用go build
         echo -e "${YELLOW}警告: wails 未找到，使用 go build${NC}"

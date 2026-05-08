@@ -5,18 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build:dev": "vite build --minify false --mode development",
+    "build": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@wailsio/runtime": "latest",
     "vue": "^3.2.37",
     "vue-router": "^4.2.5",
     "pinia": "^2.1.7"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^3.0.3",
-    "vite": "^3.0.7",
+    "@vitejs/plugin-vue": "^4.0.0",
+    "vite": "^5.0.0",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.19.2"
   }

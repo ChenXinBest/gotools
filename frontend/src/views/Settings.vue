@@ -306,7 +306,7 @@ import { useAppStore } from "../stores/app";
 import {
     GetExportSettings,
     SaveExportSettings,
-} from "../../wailsjs/go/main/App";
+} from "../../bindings/gotools/databaseservice.js";
 import { t, setLocale } from "../i18n";
 
 const appStore = useAppStore();

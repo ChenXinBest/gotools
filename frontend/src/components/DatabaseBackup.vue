@@ -22,8 +22,8 @@ import {
     ExportDatabasesMySQLDump,
     ExportTablesMySQLDump,
     ImportDumpMySQLDump,
-} from "../../wailsjs/go/main/App";
-import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+} from "../../bindings/gotools/databaseservice.js";
+import { Browser } from "@wailsio/runtime";
 import { FaSave, FaDownload, FaUpload } from "vue-icons-plus/fa";
 
 const MYSQLSHELL_NOT_FOUND = "MYSQLSHELL_NOT_FOUND";
@@ -243,12 +243,12 @@ async function refreshConnection() {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             return;
         }
         if (errorMsg.includes("MYSQLDUMP_NOT_FOUND")) {
             error.value = "未找到 mysqldump 命令，请先安装 MySQL 客户端工具";
-            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            Browser.OpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "刷新失败: " + errorMsg;
@@ -369,12 +369,12 @@ async function selectDatabase(db) {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             return;
         }
         if (errorMsg.includes("MYSQL_NOT_FOUND")) {
             error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
-            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            Browser.OpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "获取表列表失败: " + errorMsg;
@@ -583,12 +583,12 @@ async function loadExportTables() {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             return;
         }
         if (errorMsg.includes("MYSQL_NOT_FOUND")) {
             error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
-            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            Browser.OpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "获取表列表失败: " + errorMsg;
@@ -712,12 +712,12 @@ async function confirmExportConfig() {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             return;
         }
         if (errorMsg.includes("MYSQLDUMP_NOT_FOUND")) {
             error.value = "未找到 mysqldump 命令，请先安装 MySQL 客户端工具";
-            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            Browser.OpenURL("https://dev.mysql.com/downloads/");
             return;
         }
         error.value = "导出失败: " + errorMsg;
@@ -867,13 +867,13 @@ async function confirmImportConfig() {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             isImporting.value = false;
             return;
         }
         if (errorMsg.includes("MYSQL_NOT_FOUND")) {
             error.value = "未找到 mysql 命令，请先安装 MySQL 客户端工具";
-            BrowserOpenURL("https://dev.mysql.com/downloads/");
+            Browser.OpenURL("https://dev.mysql.com/downloads/");
             isImporting.value = false;
             return;
         }
@@ -904,7 +904,7 @@ async function executeImport(request) {
         const errorMsg = err.message || err || "";
         if (errorMsg.includes(MYSQLSHELL_NOT_FOUND)) {
             error.value = "未找到 mysqlsh 命令，请先安装 MySQL Shell";
-            BrowserOpenURL(MYSQLSHELL_DOWNLOAD_URL);
+            Browser.OpenURL(MYSQLSHELL_DOWNLOAD_URL);
             return;
         }
         error.value = "导入失败: " + errorMsg;

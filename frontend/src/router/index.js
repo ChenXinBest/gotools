@@ -47,6 +47,18 @@ const routes = [
     meta: { title: '设置' }
   },
   {
+    path: '/export-progress',
+    name: 'export-progress',
+    component: () => import('../views/ExportProgress.vue'),
+    meta: { title: '导出进度' }
+  },
+  {
+    path: '/import-conflicts',
+    name: 'import-conflicts',
+    component: () => import('../views/ImportConflicts.vue'),
+    meta: { title: '导入冲突' }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('../views/NotFound.vue'),

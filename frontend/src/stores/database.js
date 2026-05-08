@@ -17,7 +17,7 @@ import {
   ImportTables,
   CheckImportConflicts,
   DropConflictingTables,
-} from "../../wailsjs/go/main/App";
+} from "../../bindings/gotools/databaseservice.js";
 
 export const useDatabaseStore = defineStore("database", () => {
   // 连接管理状态

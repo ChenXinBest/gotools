@@ -17,19 +17,20 @@ GoTools是一个基于Go语言和Wails框架开发的工具集合，旨在汇总
 ## 技术栈
 
 - **后端**：Go 1.26+
-- **前端**：Vue 3 + Vite
-- **框架**：Wails v2.12.0
+- **前端**：Vue 3 + Vite 5
+- **框架**：Wails v3 (v3.0.0-alpha.87)
 - **依赖库**：
   - `github.com/shirou/gopsutil/v3` - 系统进程信息获取
   - `vue-icons-plus/fa` - Font Awesome 图标库
+  - `@wailsio/runtime` - Wails v3 前端运行时
 
 ## 快速开始
 
 ### 环境要求
 
 - **Go 1.26+**（本项目使用Go 1.26最新语法特性）
-- Node.js 16+
-- Wails CLI v2.12.0+
+- Node.js 18+
+- **Wails v3 CLI**（需要从源码编译安装，见下方说明）
 
 ### Windows环境配置说明
 
@@ -63,17 +64,17 @@ go mod tidy
 运行以下命令启动开发服务器：
 
 ```bash
-wails dev
+wails3 dev
 ```
 
-这将启动一个Vite开发服务器，提供前端热重载功能。同时，还会启动一个开发服务器，运行在 http://localhost:34115，您可以在浏览器中访问并通过devtools调用Go代码。
+这将启动一个Vite开发服务器，提供前端热重载功能。
 
 ### 构建
 
 要构建可分发的生产模式包，使用：
 
 ```bash
-wails build
+wails3 build
 ```
 
 ## 项目结构
@@ -81,18 +82,30 @@ wails build
 ```
 gotools/
 ├── app.go                    # Wails应用入口
-├── main.go                   # 程序入口
-├── wails.json                # Wails配置
+├── main.go                   # Wails v3 应用入口
+├── models.go                 # DTO 数据结构
+├── process_service.go        # 进程管理 Wails 服务
+├── database_service.go       # 数据库 Wails 服务
+├── dialog_service.go         # 对话框 Wails 服务
+├── tray_menu.go              # 系统托盘 + 应用菜单
+├── multi_window.go           # 多窗口管理
+├── Taskfile.yml              # v3 构建任务
 ├── go.mod                    # Go模块文件
-├── build/                    # 构建脚本
+├── build/                    # 构建配置
+│   ├── config.yml            # v3 构建配置
+│   ├── Taskfile.yml          # 构建子任务
+│   ├── windows/              # Windows 构建脚本
+│   ├── darwin/               # macOS 构建脚本
+│   └── linux/                # Linux 构建脚本
 ├── frontend/                 # 前端代码
 │   ├── src/                  # 源代码
 │   │   ├── components/       # Vue组件
 │   │   ├── views/            # 页面视图
 │   │   ├── stores/           # Pinia状态管理
 │   │   ├── router/           # Vue Router
-│   │   ├── wailsjs/          # Wails生成的绑定
+│   │   ├── bindings/         # Wails v3 自动生成绑定
 │   │   └── style.css         # 全局样式
+│   ├── node_modules/         # 前端依赖
 │   └── package.json          # 前端依赖
 ├── internal/                 # 内部包
 │   ├── config/               # 配置管理

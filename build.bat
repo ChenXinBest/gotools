@@ -43,7 +43,7 @@ echo.
 echo [1/4] 构建 windows/amd64 版本...
 set GOOS=windows
 set GOARCH=amd64
-wails build -o "build\gotools-windows-amd64.exe" -ldflags "%LDFLAGS%"
+wails3 build -ldflags "%LDFLAGS%"
 if errorlevel 1 (
     echo 构建失败！
     goto error

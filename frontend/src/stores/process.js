@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { GetSystemProcessInfos, SearchPidByKeyWord, KillProcessByPID } from '../../wailsjs/go/main/App'
+import { GetSystemProcessInfos, SearchPidByKeyWord, KillProcessByPID, Greet } from '../../bindings/gotools/processservice.js'
 
 export const useProcessStore = defineStore('process', () => {
   // 状态

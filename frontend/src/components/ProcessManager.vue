@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted } from 'vue'
-import { GetSystemProcessInfos, SearchPidByKeyWord, KillProcessByPID } from '../../wailsjs/go/main/App'
+import { GetSystemProcessInfos, SearchPidByKeyWord, KillProcessByPID } from '../../bindings/gotools/processservice.js'
 
 const processes = ref([])
 const searchKeyword = ref('')
@@ -403,13 +403,62 @@ function handleClickOutside(e) {
   }
 }
 
+// 键盘快捷键处理
+function handleKeydown(e) {
+  // 忽略输入框中的按键
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    return
+  }
+
+  // F5 - 刷新进程
+  if (e.key === 'F5') {
+    e.preventDefault()
+    loadProcesses()
+    showStatus('已刷新')
+    return
+  }
+
+  // Escape - 关闭弹窗/清除选择
+  if (e.key === 'Escape') {
+    if (killConfirm.value.show) {
+      cancelKill()
+    } else if (contextMenu.value.show) {
+      closeContextMenu()
+    } else if (selectedPIDs.value.size > 0) {
+      selectedPIDs.value.clear()
+      selectedPIDs.value = new Set()
+    }
+    return
+  }
+
+  // Delete - 终止选中进程
+  if (e.key === 'Delete') {
+    if (selectedPIDs.value.size > 0 && !killConfirm.value.show) {
+      showKillConfirm()
+    }
+    return
+  }
+
+  // Ctrl+A - 全选
+  if (e.ctrlKey && e.key === 'a') {
+    e.preventDefault()
+    const allProcesses = processTree.value.flatMap(app => app.processes)
+    allProcesses.forEach(p => selectedPIDs.value.add(p.PID))
+    selectedPIDs.value = new Set(selectedPIDs.value)
+    showStatus(`已选择 ${selectedPIDs.value.size} 个进程`)
+    return
+  }
+}
+
 onMounted(() => {
   loadProcesses()
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleKeydown)
 })
 </script>
 

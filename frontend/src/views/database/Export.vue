@@ -217,7 +217,7 @@ import { useDatabaseStore } from '../../stores/database'
 import {
   ExportDatabasesMySQLDump,
   ExportTablesMySQLDump
-} from '../../../wailsjs/go/main/App'
+} from '../../../bindings/gotools/databaseservice.js'
 
 const props = defineProps({
   exportTool: {
